@@ -1,0 +1,25 @@
+$LOAD_PATH.unshift File.expand_path('../lib', __FILE__)
+require 'cloudflock/version'
+
+Gem::Specification.new do |s|
+  s.name = "cloudflock"
+  s.version = CloudFlock::VERSION
+
+  s.description = "CloudFlock is a library and toolchain focused on migration"
+  s.summary = "Server migration automation"
+  s.authors = ["Chris Wuest"]
+  s.email = "chris@chriswuest.com"
+  s.homepage = "http://github.com/cwuest/cloudflock"
+
+  s.add_dependency('fog')
+  s.add_dependency('expectr')
+  s.add_dependency('cpe')
+
+  s.files = `git ls-files lib`.split("\n")
+  s.files += `git ls-files bin`.split("\n")
+  s.files.reject! { |f| f.include?(".dev") }
+
+  s.executables = ['flock', 'flock-profile', 'flock-servers']
+
+  s.license = 'Apache 2.0'
+end

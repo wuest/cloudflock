@@ -1,0 +1,44 @@
+= CloudFlock
+
+CloudFlock is an API and toolchain aimed at automating tasks involved in
+migrating servers.
+
+== Requirements
+
+CloudFlock assumes a Unix environment, and also assumes that the ssh(1) binary
+is present and accessible on the system.  It also depends on the following
+ruby libraries:
+  * fog
+  * expectr
+  * cpe
+
+== Using CloudFlock
+
+CloudFlock has two main components.  There is CloudFLock, which is the API
+provided, and flock, which is the command line toolchain.
+
+=== Flock
+
+The flock utility can be invoked directly from the command line, assuming that
+gem installs executables in the path.  Flock has two main functions:
+  * profile will gather and report information about a remote host which might
+            be useful in determining migration parameters (target server, etc.)
+  * servers is the migration engine proper, which acts as a wizard, walking
+            through the steps of profiling, spinning up a new server (if
+	    applicable) and migrating data from the source host to the
+	    destination.
+
+=== CloudFlock
+
+The API is presented relatively simply and should not be difficult to implement
+in projects.  The CLI applications under interface/cli should serve as
+implementation examples.
+
+== Contributions
+
+Please keep all pull requests to a single commit in order to make evaluation of
+changes easier.
+
+== Copyright
+
+Copyright (c) 2013 Rackspace US, Inc. See COPYING for details.

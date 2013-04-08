@@ -1,0 +1,3 @@
+mount proc -t proc /mnt/migration_target/proc
+mount /dev /mnt/migration_target/dev -o rbind
+mount /sys /mnt/migration_target/sys -o rbind

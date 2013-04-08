@@ -1,0 +1,10 @@
+/usr/lib/yum-plugins
+/etc/yum.conf
+/etc/yum
+/etc/yum.repos.d
+/etc/cloud/templates/amzn*
+/etc/rpm
+/etc/issue
+/etc/selinux/config
+/etc/sysctl.conf
+/etc/yum.repos.d/amzn-*

@@ -1,0 +1,32 @@
+#!/usr/bin/env ruby
+
+current_path = File.expand_path('../', __FILE__)
+function = ARGV.shift.to_s
+bin = File.basename($0, '.dev')
+
+if function.match(/^[^-]/)
+  target = "#{current_path}/#{bin}-#{function}"
+else
+  ARGV.unshift(function)
+  target = "#{current_path}/#{bin}.default"
+end
+
+if File.exists?(target)
+  load target
+else
+  print "Function \"#{function}\" not found.  " unless target =~ /\.default$/
+  puts "Available functions:"
+
+  functions = []
+  Dir.foreach(current_path) do |file|
+    next unless file.match(/^#{bin}-[^.]*$/)
+    functions << file.gsub(/^#{bin}-/, '')
+  end
+
+  until functions.empty?
+    a, b, c = functions.shift(3)
+    puts "%-15s %-15s %-15s" % [a, b, c].map { |i| i.to_s }
+  end
+
+  exit 1
+end

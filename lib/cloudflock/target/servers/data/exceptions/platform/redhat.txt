@@ -1,0 +1,5 @@
+/etc/yum.repos.d/
+/usr/lib/yum-plugins
+/etc/yum.conf
+/etc/yum
+/etc/yum.repos.d

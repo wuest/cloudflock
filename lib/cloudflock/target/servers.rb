@@ -1,0 +1,5 @@
+require 'cloudflock'
+require 'cloudflock/target/servers/profile'
+require 'cloudflock/target/servers/migrate'
+require 'cloudflock/target/servers/platform/v1'
+require 'cloudflock/target/servers/platform/v2'
