@@ -31,7 +31,7 @@ module CloudFlock::Interface::CLI::Console extend self
     acceptable = false
     until acceptable
       printf("%s %s> ", question, default_display)
-      answer = readline.strip
+      answer = $stdin.readline.strip
 
       if answer.empty? && allow_empty
         acceptable = true
