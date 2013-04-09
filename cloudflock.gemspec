@@ -19,7 +19,7 @@ Gem::Specification.new do |s|
   s.files += `git ls-files bin`.split("\n")
   s.files.reject! { |f| f.include?(".dev") }
 
-  s.executables = ['flock', 'flock-profile', 'flock-servers']
+  s.executables = ['cloudflock', 'cloudflock-profile', 'cloudflock-servers']
 
   s.license = 'Apache 2.0'
 end
