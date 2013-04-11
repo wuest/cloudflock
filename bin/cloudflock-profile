@@ -1,5 +1,7 @@
 #!/usr/bin/env ruby
 
+$0 = 'cloudflock-profile'
+
 require 'cloudflock/interface/cli/app/servers/profile'
 CLI = CloudFlock::Interface::CLI::Console
 Opts = CloudFlock::Interface::CLI::Opts

@@ -1,5 +1,7 @@
 #!/usr/bin/env ruby
 
+$0 = 'cloudflock-servers'
+
 require 'cloudflock/interface/cli/app/servers/migrate'
 CLI = CloudFlock::Interface::CLI::Console
 Opts = CloudFlock::Interface::CLI::Opts
