@@ -293,8 +293,9 @@ class CloudFlock::Interface::CLI::App::Servers::Migrate
       destination_host_def[:target_addr] = destination_host_def[:host]
     end
 
-    # Define no timeout for the migration rsync
+    # Set rsync path and no timeout for the migration rsync
     destination_host_def[:timeout] = -1
+    destination_host_def[:rsync] = source_profile[:rsync]
 
     # Kick off the migration proper
     if opts[:verbose]

@@ -69,7 +69,7 @@ module CloudFlock::Target::Servers::Migrate extend self
     preserve_files = ["passwd", "shadow", "group"]
     path = "/mnt/migration_target/etc"
     preserve_files.each do |file|
-      copy_command = "[ -f #{path}migration.#{file} ] || cp -af " +
+      copy_command = "[ -f #{path}/migration.#{file} ] || /bin/cp -an " +
                      "#{path}/#{file} #{path}/migration.#{file}"
       host.puts(copy_command)
       host.prompt
@@ -164,7 +164,7 @@ module CloudFlock::Target::Servers::Migrate extend self
   #                    (default: {}):
   #                    :target_addr - String containing the address to use when
   #                                   communicating with the destination host.
-  #                    :rsync_path  - String containing path to rsync binary on
+  #                    :rsync       - String containing path to rsync binary on
   #                                   the source machine.  If this is nil, copy
   #                                   rsync from the destination machine to
   #                                   /root/.rackspace/ for the purposes of
@@ -179,7 +179,7 @@ module CloudFlock::Target::Servers::Migrate extend self
     end
 
     # If we lack rsync, fetch it from the destination server
-    if args[:rsync_path].nil?
+    if args[:rsync].nil?
       source_host.puts("mkdir /root/.rackspace")
       source_host.prompt
 
@@ -189,7 +189,7 @@ module CloudFlock::Target::Servers::Migrate extend self
                       "/root/.rackspace/rsync"
       source_host.puts(rsync_install)
       source_host.prompt
-      args[:rsync_path] = "/root/.rackspace/rsync"
+      args[:rsync] = "/root/.rackspace/rsync"
     end
 
     2.times do
@@ -218,7 +218,7 @@ module CloudFlock::Target::Servers::Migrate extend self
   #                    Expected parameters are:
   #                    :target_addr - String containing the address to use when
   #                                   communicating with the destination host.
-  #                    :rsync_path  - String containing path to rsync binary on
+  #                    :rsync       - String containing path to rsync binary on
   #                                   the source machine.  If this is nil, copy
   #                                   rsync from the destination machine to
   #                                   /root/.rackspace/ for the purposes of
@@ -234,7 +234,7 @@ module CloudFlock::Target::Servers::Migrate extend self
   # Returns true if rsync finishes.
   # Returns false if rsync does not complete within timeout.
   def migration_watcher(source_host, args)
-    rsync_command = "#{args[:rsync_path]} -azP -e 'ssh " +
+    rsync_command = "#{args[:rsync]} -azP -e 'ssh " +
                     "#{CloudFlock::Remote::SSH::SSH_ARGUMENTS} -i " +
                     "/tmp/RACKSPACE_MIGRATION/migration_id_rsa' " +
                     "--exclude-from='/root/.rackspace/" +
