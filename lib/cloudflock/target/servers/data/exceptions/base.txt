@@ -16,7 +16,7 @@
 /etc/networks
 /etc/rc3.d/S99Galaxy
 /etc/resolv.conf
-/etc/sysconfig/network/*
+/etc/sysconfig/network
 /etc/sysconfig/network-scripts/*
 /etc/system-release
 /etc/system-release-cpe
