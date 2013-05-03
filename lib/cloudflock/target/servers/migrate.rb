@@ -179,7 +179,7 @@ module CloudFlock::Target::Servers::Migrate extend self
     end
 
     # If we lack rsync, fetch it from the destination server
-    if args[:rsync].nil?
+    unless args[:rsync]
       source_host.puts("mkdir /root/.rackspace")
       source_host.prompt
 
