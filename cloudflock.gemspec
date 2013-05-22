@@ -11,7 +11,7 @@ Gem::Specification.new do |s|
   s.email = "chris@chriswuest.com"
   s.homepage = "http://github.com/cwuest/cloudflock"
 
-  s.add_dependency('fog')
+  s.add_dependency('fog', '>=1.11.1')
   s.add_dependency('expectr')
   s.add_dependency('cpe')
 
