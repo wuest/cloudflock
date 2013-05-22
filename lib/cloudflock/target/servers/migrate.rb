@@ -69,7 +69,7 @@ module CloudFlock::Target::Servers::Migrate extend self
     preserve_files = ["passwd", "shadow", "group"]
     path = "/mnt/migration_target/etc"
     preserve_files.each do |file|
-      copy_command = "[ -f #{path}/migration.#{file} ] || /bin/cp -an " +
+      copy_command = "[ -f #{path}/migration.#{file} ] || /bin/cp -a " +
                      "#{path}/#{file} #{path}/migration.#{file}"
       host.puts(copy_command)
       host.prompt

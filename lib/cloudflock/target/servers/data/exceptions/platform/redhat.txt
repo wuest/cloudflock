@@ -3,3 +3,4 @@
 /etc/yum.conf
 /etc/yum
 /etc/yum.repos.d
+/etc/sysconfig/iptables
