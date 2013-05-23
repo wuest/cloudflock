@@ -121,9 +121,6 @@ class CloudFlock::Interface::CLI::App::Servers::Migrate
                                      rackspace_region: api[:region],
                                      version: api[:version])
 
-      # Rescue patch has to be loaded after the connection is created
-      require 'cloudflock/patch/fog'
-
       # Send API call
       new_server = CLI.spinner("Spinning up new server: #{api[:hostname]}") do
         rack_api.servers::create(name: api[:hostname],
