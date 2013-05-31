@@ -211,55 +211,6 @@ module CloudFlock::Target::Servers::Migrate extend self
     end
   end
 
-  # Internal: Execute rsync and return true if everything appears to have completed successfully
-  #
-  # source_host      - SSH object logged in to the source host.
-  # args             - Hash containing additional parameters for operation.
-  #                    Expected parameters are:
-  #                    :target_addr - String containing the address to use when
-  #                                   communicating with the destination host.
-  #                    :rsync       - String containing path to rsync binary on
-  #                                   the source machine.  If this is nil, copy
-  #                                   rsync from the destination machine to
-  #                                   /root/.rackspace/ for the purposes of
-  #                                   carrying out the migration.
-  #                                   (default: nil)
-  #                    :timeout     - Fixnum containing the number of seconds
-  #                                   to wait before reporting failure/hung
-  #                                   rsync process.  If this is set to -1, a
-  #                                   failure will never be reported--use
-  #                                   Watchdogs in this case to prevent
-  #                                   indefinite migrations.  (default: 14400)
-  #
-  # Returns true if rsync finishes.
-  # Returns false if rsync does not complete within timeout.
-  def migration_watcher(source_host, args)
-    rsync_command = "#{args[:rsync]} -azP -e 'ssh " +
-                    "#{CloudFlock::Remote::SSH::SSH_ARGUMENTS} -i " +
-                    "/tmp/RACKSPACE_MIGRATION/migration_id_rsa' " +
-                    "--exclude-from='/root/.rackspace/" +
-                    "migration_exceptions.txt' / " +
-                    "root@#{args[:target_addr]}:/mnt/migration_target"
-    source_host.puts(rsync_command)
-
-    source_host.set_timeout(60)
-    if(args[:timeout] >= 0)
-      i = args[:timeout]/60 + 1
-    else
-      i = -1
-    end
-
-    begin
-      source_host.prompt
-    rescue Timeout::Error
-      i -= 1
-      retry unless i == 0
-      return false
-    end
-
-    true
-  end
-
   # Public: Build exclusions list from generic and targeted exclusions
   # definitions per CPE.
   #
@@ -315,35 +266,6 @@ module CloudFlock::Target::Servers::Migrate extend self
     sudoers = "cat <<EOF >> /etc/sudoers\n\nrack ALL=(ALL) NOPASSWD: ALL\nEOF"
     destination_host.puts(sudoers)
     destination_host.prompt
-
-    true
-  end
-
-  # Internal: Create user and restore entries from backup passwd and shadow
-  # files.
-  #
-  # destination_host - SSH object logged in to the host on which to restore a
-  #                    user.
-  # username         - String containing the user to restore.
-  #
-  # Returns true if success, false otherwise.
-  def restore_user(destination_host, username)
-    username.strip!
-    sanity_check = "(grep '^#{username}:' /etc/migration.passwd && grep " +
-                   "'^#{username}:' /etc/migration.shadow) >/dev/null " +
-                   "2>/dev/null && printf 'PRESENT'"
-
-    sane = destination_host.query("USER_CHECK", sanity_check)
-    return false if sane.empty?
-
-    steps = ["useradd #{username}",
-             "chown -R #{username}.#{username} /home/#{username}",
-             "sed -i '/^#{username}:.*$/d' /etc/shadow",
-             "grep '^#{username}:' /etc/migration.shadow >> /etc/shadow"]
-    steps.each do |step|
-      destination_host.puts(step)
-      destination_host.prompt
-    end
 
     true
   end
@@ -415,6 +337,84 @@ module CloudFlock::Target::Servers::Migrate extend self
 
     # Perform post-chroot steps
     long_run(destination_host, "/bin/bash /root/migration_clean_post.sh")
+  end
+
+  # Internal: Execute rsync and return true if everything appears to have completed successfully
+  #
+  # source_host      - SSH object logged in to the source host.
+  # args             - Hash containing additional parameters for operation.
+  #                    Expected parameters are:
+  #                    :target_addr - String containing the address to use when
+  #                                   communicating with the destination host.
+  #                    :rsync       - String containing path to rsync binary on
+  #                                   the source machine.  If this is nil, copy
+  #                                   rsync from the destination machine to
+  #                                   /root/.rackspace/ for the purposes of
+  #                                   carrying out the migration.
+  #                                   (default: nil)
+  #                    :timeout     - Fixnum containing the number of seconds
+  #                                   to wait before reporting failure/hung
+  #                                   rsync process.  If this is set to -1, a
+  #                                   failure will never be reported--use
+  #                                   Watchdogs in this case to prevent
+  #                                   indefinite migrations.  (default: 14400)
+  #
+  # Returns true if rsync finishes.
+  # Returns false if rsync does not complete within timeout.
+  def migration_watcher(source_host, args)
+    rsync_command = "#{args[:rsync]} -azP -e 'ssh " +
+                    "#{CloudFlock::Remote::SSH::SSH_ARGUMENTS} -i " +
+                    "/tmp/RACKSPACE_MIGRATION/migration_id_rsa' " +
+                    "--exclude-from='/root/.rackspace/" +
+                    "migration_exceptions.txt' / " +
+                    "root@#{args[:target_addr]}:/mnt/migration_target"
+    source_host.puts(rsync_command)
+
+    source_host.set_timeout(60)
+    if(args[:timeout] >= 0)
+      i = args[:timeout]/60 + 1
+    else
+      i = -1
+    end
+
+    begin
+      source_host.prompt
+    rescue Timeout::Error
+      i -= 1
+      retry unless i == 0
+      return false
+    end
+
+    true
+  end
+
+  # Internal: Create user and restore entries from backup passwd and shadow
+  # files.
+  #
+  # destination_host - SSH object logged in to the host on which to restore a
+  #                    user.
+  # username         - String containing the user to restore.
+  #
+  # Returns true if success, false otherwise.
+  def restore_user(destination_host, username)
+    username.strip!
+    sanity_check = "(grep '^#{username}:' /etc/migration.passwd && grep " +
+                   "'^#{username}:' /etc/migration.shadow) >/dev/null " +
+                   "2>/dev/null && printf 'PRESENT'"
+
+    sane = destination_host.query("USER_CHECK", sanity_check)
+    return false if sane.empty?
+
+    steps = ["useradd #{username}",
+             "chown -R #{username}.#{username} /home/#{username}",
+             "sed -i '/^#{username}:.*$/d' /etc/shadow",
+             "grep '^#{username}:' /etc/migration.shadow >> /etc/shadow"]
+    steps.each do |step|
+      destination_host.puts(step)
+      destination_host.prompt
+    end
+
+    true
   end
 
   # Internal: Insure that new output is being produced by a running process
