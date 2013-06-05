@@ -1,4 +1,6 @@
 require 'fog'
+require 'socket'
+require 'tempfile'
 require 'cloudflock/target/servers'
 require 'cloudflock/interface/cli/app/common/servers'
 
@@ -303,12 +305,19 @@ class CloudFlock::Interface::CLI::App::Servers::Migrate
       end
     end
 
+    CLI.spinner "Logging out of source host" do
+      source_host_ssh.logout!
+    end
+
     CLI.spinner "Cleaning up destination host" do
       Migrate.clean_destination(destination_host_ssh, source_profile[:cpe])
     end
 
-    [destination_host_ssh, source_host_ssh].each do |host|
-      host.logout!
+    ip_list = determine_ips(source_profile[:ip][:public])
+    ip_list.each { |ip| remediate_ip_config(destination_host_ssh, ip, destination_host_def[:host]) }
+
+    CLI.spinner "Logging out of destination host" do
+      source_host_ssh.logout!
     end
 
     puts
@@ -330,8 +339,6 @@ class CloudFlock::Interface::CLI::App::Servers::Migrate
                           default_answer: "N")
 
     if alter
-      require 'tempfile'
-
       tmp_file = Tempfile.new("exclude")
       tmp_file.write(exclusion_string)
       tmp_file.close
@@ -351,5 +358,134 @@ class CloudFlock::Interface::CLI::App::Servers::Migrate
     end
 
     exclusion_string
+  end
+
+  # Internal: Show the list of IPs detected and ascertain whether to perform
+  # remediation of configuration files.
+  #
+  # ip_list - Array containing Strings containing IP addresses detected from
+  #           the source host.
+  #
+  # Returns an Array of Strings containing IPs to consider for remediation.
+  # Raises an ArgumentError if ip_list is not an Array.
+  def determine_ips(ip_list)
+    unless ip_list.kind_of?(Array)
+      raise ArgumentError, "Expected an Array, got a #{ip_list.class.name}"
+    end
+    return([]) if ip_list.empty?
+
+    puts "IP Addresses detected for remediation:"
+    puts ip_list
+
+    if CLI.prompt_yn("Edit IP list? (Y/N)", default_answer: "N")
+      tmp_file = Tempfile.new("ips")
+      tmp_file.write(ip_list.join("\n"))
+      tmp_file.close
+
+      launch_editor(tmp_file.path)
+      tmp_file.open
+
+      ip_list = tmp_file.lines.select do |ip|
+        begin
+          Socket.getaddrinfo(ip, nil, nil, Socket::SOCK_STREAM)[0][3]
+        rescue SocketError
+          false
+        end
+      end
+
+      tmp_file.close
+      tmp_file.unlink
+    end
+
+    ip_list
+  end
+
+  # Internal: Find instances of a given IP in configuration files and
+  # selectively replace them with an IP available on the target system.
+  #
+  # destination_shell - CloudFlock::Remote::SSH object connected to the
+  #                     destination host.
+  # source_ip         - String containing an IP.
+  # destination_ip    - String containing primary IP detected for the host.
+  #
+  # Returns nothing.
+  # Raises ArgumentError if source_ip is not a String.
+  def remediate_ip_config(destination_shell, source_ip, destination_ip)
+    unless destination_shell.kind_of?(CloudFlock::Remote::SSH)
+      raise ArgumentError, "Expected an SSH session, got a " +
+                           "#{destination_shell.class.name}"
+    end
+    unless source_ip.kind_of?(String)
+      raise ArgumentError, "Expected a String, got a #{source_ip.class.name}"
+    end
+    source_ip = Socket.getaddrinfo(source_ip, nil, nil,
+                                   Socket::SOCK_STREAM)[0][3]
+
+    grep_command = "grep -rl #{source_ip} /mnt/migration_target/etc " +
+                   "2>/dev/null | grep -v log"
+    files = destination_shell.query("IP_CHECK", grep_command)
+    unless files.strip.empty?
+      tmp_file = Tempfile.new("filelist")
+      tmp_file.write("Configuration files found for #{source_ip}:\n\n#{files}")
+      tmp_file.close
+      system("less -C #{tmp_file.path}")
+      tmp_file.unlink
+
+      proceed = CLI.prompt_yn("Replace #{source_ip} in these files? (Y/N)",
+                              default_answer: "Y")
+      if proceed
+        edit = false
+      else
+        edit = CLI.prompt_yn("Edit the list? (Y/N)", default: "Y")
+      end
+
+      if edit
+        tmp_file = Tempfile.new("filelist")
+        tmp_file.write("#{files}")
+        tmp_file.close
+        launch_editor(tmp_file.path)
+        tmp_file.open
+        files = tmp_file.read
+        tmp_file.unlink
+        proceed = true
+      end
+
+      if proceed
+        replacement_ip = CLI.prompt("IP to replace #{source_ip}",
+                                    default_answer: destination_ip)
+        CLI.spinner("Remediating configuration files for #{source_ip}") do
+          files.each_line do |file|
+            file.strip!
+            next if file.empty?
+            file.gsub!(/'/, "\\'")
+
+            sed_command = "sed -i 's/#{source_ip}/#{replacement_ip}/' '#{file}'" 
+            destination_shell.puts(sed_command)
+            destination_shell.prompt
+          end
+        end
+      end
+    end
+  end
+
+  # Internal: Launch the user's editor to edit a file.
+  #
+  # path - String containing the path to the file to edit
+  #
+  # Returns nothing.
+  # Raises Errno::ENOENT if the path does not point to an existing file.
+  def launch_editor(path)
+    unless File.exists?(path)
+      raise Errno::ENOENT, "Unable to open #{path}"
+    end
+
+    # Allow for "other" editors
+    if File.exists?("/usr/bin/editor")
+      editor = "/usr/bin/editor"
+    else
+      editor = "vim"
+    end
+
+    system("#{editor} #{path}")
   end
 end
