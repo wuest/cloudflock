@@ -4,3 +4,4 @@
 /etc/yum
 /etc/yum.repos.d
 /etc/sysconfig/iptables
+/etc/sysconfig/rhn
