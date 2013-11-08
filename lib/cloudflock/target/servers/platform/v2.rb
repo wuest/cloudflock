@@ -46,7 +46,10 @@ class CloudFlock::Target::Servers::Platform::V2 <
         "10.04" => "d531a2dd-7ae9-4407-bb5a-e5ea03303d98",
         "11.04" => "8bf22129-8483-462b-a020-1754ec822770",
         "11.10" => "3afe97b2-26dc-49c5-a2cc-a2fc8d80c001",
-        "12.04" => "5cebb13a-f783-4f8c-8058-c4182c724ccd"
+        "12.04" => "5cebb13a-f783-4f8c-8058-c4182c724ccd",
+        "12.10" => "ead43b0d-f84f-4bc1-8682-5b6046e69552",
+        "13.04" => "9e1a83cf-ba21-44b6-8808-5837e291cfe2",
+        "13.10" => "868a0966-0553-42fe-b8b3-5cadc0e0b3c5"
       }
     })
 
@@ -70,7 +73,10 @@ class CloudFlock::Target::Servers::Platform::V2 <
     		"10.04" => "d531a2dd-7ae9-4407-bb5a-e5ea03303d98",
     		"11.04" => "8bf22129-8483-462b-a020-1754ec822770",
     		"11.10" => "3afe97b2-26dc-49c5-a2cc-a2fc8d80c001",
-    		"12.04" => "5cebb13a-f783-4f8c-8058-c4182c724ccd"
+    		"12.04" => "5cebb13a-f783-4f8c-8058-c4182c724ccd",
+        "12.10" => "ead43b0d-f84f-4bc1-8682-5b6046e69552",
+        "13.04" => "9e1a83cf-ba21-44b6-8808-5837e291cfe2",
+        "13.10" => "868a0966-0553-42fe-b8b3-5cadc0e0b3c5"
     	}
     })
   end
@@ -87,7 +93,16 @@ class CloudFlock::Target::Servers::Platform::V2 <
       {id: 5, mem: 4096, hdd: 160},
       {id: 6, mem: 8192, hdd: 320},
       {id: 7, mem: 15872, hdd: 620},
-      {id: 8, mem: 30720, hdd: 1200}
-    ])
+      {id: 8, mem: 30720, hdd: 1200},
+      {id: "performance1-1", mem: 1024, hdd: 20},
+      {id: "performance1-2", mem: 2048, hdd: 60},
+      {id: "performance1-4", mem: 4096, hdd: 80},
+      {id: "performance1-8", mem: 8192, hdd: 120},
+      {id: "performance2-15", mem: 15360, hdd: 190},
+      {id: "performance2-30", mem: 30720, hdd: 340},
+      {id: "performance2-60", mem: 61440, hdd: 640},
+      {id: "performance2-90", mem: 92160, hdd: 940},
+      {id: "performance2-120", mem: 122880, hdd: 1240}
+    ].reduce({}) {|list, flavor| list[flavor[:id]] = flavor; list })
   end
 end

@@ -74,11 +74,11 @@ class CloudFlock::Interface::CLI::App::Servers::Migrate
       if proceed
         api[:flavor] = default_target[:id]
       else
-        puts CLI.build_grid(flavor_list, 
+        puts CLI.build_grid(flavor_list.values,
                             {id: "ID", mem: "RAM (MiB)", hdd: "HDD (GB)" })
         api[:flavor] = CLI.prompt("Flavor ID",
                                   default_answer: default_target[:id])
-        api[:flavor] = api[:flavor].to_i
+        api[:flavor] = api[:flavor].to_i if api[:flavor].match(/^[0-9]+$/)
       end
 
       migration_exclusions = determine_exclusions(source_profile[:cpe])
@@ -97,7 +97,7 @@ class CloudFlock::Interface::CLI::App::Servers::Migrate
 
 
       # Check to make sure we have a valid flavor ID
-      exit 0 if api[:flavor] == 0 or flavor_list[api[:flavor]-1].nil?
+      exit 0 if api[:flavor] == 0 or flavor_list[api[:flavor]].nil?
 
       # Build our API call
       api[:hostname] = CLI.prompt("New Server Name",
@@ -105,8 +105,8 @@ class CloudFlock::Interface::CLI::App::Servers::Migrate
 
       # OpenCloud only supports US migrations presently
       if opts[:function] == :opencloud
-        api[:region] = CLI.prompt("Region (dfw, ord)", default_answer: "dfw",
-                            valid_answers: ["ord", "dfw"])
+        api[:region] = CLI.prompt("Region (dfw, ord, iad, etc...)", default_answer: "dfw",
+                            valid_answers: ["ord", "dfw", "iad", "hkg", "syd"])
       else
         api[:region] = :dfw
       end
