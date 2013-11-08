@@ -105,8 +105,8 @@ class CloudFlock::Interface::CLI::App::Servers::Migrate
 
       # OpenCloud only supports US migrations presently
       if opts[:function] == :opencloud
-        api[:region] = CLI.prompt("Region (dfw, ord)", default_answer: "dfw",
-                            valid_answers: ["ord", "dfw"])
+        api[:region] = CLI.prompt("Region (dfw, ord, iad, etc...)", default_answer: "dfw",
+                            valid_answers: ["ord", "dfw", "iad", "hkg", "syd"])
       else
         api[:region] = :dfw
       end
