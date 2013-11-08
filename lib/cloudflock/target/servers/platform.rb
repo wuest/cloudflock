@@ -80,7 +80,7 @@ class CloudFlock::Target::Servers::Platform
       raise MapUndefined, "FLAVOR_LIST is undefined; maps appear unbuild."
     end
 
-    self.class::FLAVOR_LIST.each_with_index do |target, idx|
+    self.class::FLAVOR_LIST.each do |idx, target|
       if target[symbol] > value
         return idx
       end

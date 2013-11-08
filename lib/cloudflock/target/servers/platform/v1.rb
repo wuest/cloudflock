@@ -92,6 +92,6 @@ class CloudFlock::Target::Servers::Platform::V1 <
       {id: 6, mem: 8192, hdd: 320},
       {id: 7, mem: 15872, hdd: 620},
       {id: 8, mem: 30720, hdd: 1200}
-    ])
+    ].reduce({}) {|list, flavor| list[flavor[:id]] = flavor; list })
   end
 end

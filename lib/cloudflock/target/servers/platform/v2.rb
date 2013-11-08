@@ -93,7 +93,16 @@ class CloudFlock::Target::Servers::Platform::V2 <
       {id: 5, mem: 4096, hdd: 160},
       {id: 6, mem: 8192, hdd: 320},
       {id: 7, mem: 15872, hdd: 620},
-      {id: 8, mem: 30720, hdd: 1200}
-    ])
+      {id: 8, mem: 30720, hdd: 1200},
+      {id: "performance1-1", mem: 1024, hdd: 20},
+      {id: "performance1-2", mem: 2048, hdd: 60},
+      {id: "performance1-4", mem: 4096, hdd: 80},
+      {id: "performance1-8", mem: 8192, hdd: 120},
+      {id: "performance2-15", mem: 15360, hdd: 190},
+      {id: "performance2-30", mem: 30720, hdd: 340},
+      {id: "performance2-60", mem: 61440, hdd: 640},
+      {id: "performance2-90", mem: 92160, hdd: 940},
+      {id: "performance2-120", mem: 122880, hdd: 1240}
+    ].reduce({}) {|list, flavor| list[flavor[:id]] = flavor; list })
   end
 end
