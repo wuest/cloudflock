@@ -1,19 +1,7 @@
 #!/usr/bin/env ruby
 
+require 'cloudflock/app/server-profile'
+
 $0 = 'cloudflock-profile'
 
-require 'cloudflock/interface/cli/app/servers/profile'
-CLI = CloudFlock::Interface::CLI::Console
-Opts = CloudFlock::Interface::CLI::Opts
-
-# Trap C-c to kill the application in a friendly manner
-trap 'INT' do
-  puts "\nCaught SIGINT, exiting..."
-  exit 1
-end
-
-options = Opts.parse
-options[:function] = :profile
-options[:config] = Opts.parse_config_file(options[:config_file])
-
-CloudFlock::Interface::CLI::App::Servers::Profile.new(options)
+CloudFlock::App::ServerProfile.new

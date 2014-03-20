@@ -1,4 +1,0 @@
-yum install -y yum-plugin-downloadonly
-mkdir -p /mnt/migration_target/root/.rackspace/rpms/{db,full}
-yum reinstall -y --downloadonly --downloaddir=/mnt/migration_target/root/.rackspace/rpms/db/ redhat-release
-yum reinstall -y --downloadonly --downloaddir=/mnt/migration_target/root/.rackspace/rpms/full/ yum

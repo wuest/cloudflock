@@ -1,26 +1,13 @@
 module CloudFlock
-  module Remote
-    class SSH
-      class InvalidHostname < StandardError; end
-      class ConnectionFailed < StandardError; end
-      class LoginFailed < StandardError; end
-      class RootFailed < StandardError; end
+  module App
+    module Common
+      class NoRsyncAvailable < StandardError; end
     end
   end
 
-  module Target
-    module Servers
-      module Migrate
-        class LongRunFailed < StandardError; end
-      end
-
-      class Platform
-        class ValueError < StandardError; end
-        class MapUndefined < NameError; end
-      end
-
-      class Profile
-      end
+  module Remote
+    class SSH
+      class InvalidHostname < StandardError; end
     end
   end
 end

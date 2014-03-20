@@ -1,26 +1,7 @@
 #!/usr/bin/env ruby
 
+require 'cloudflock/app/server-migrate'
+
 $0 = 'cloudflock-servers'
 
-require 'cloudflock/interface/cli/app/servers/migrate'
-CLI = CloudFlock::Interface::CLI::Console
-Opts = CloudFlock::Interface::CLI::Opts
-
-# Trap C-c to kill the application in a friendly manner
-trap 'INT' do
-  puts "\nCaught SIGINT, exiting..."
-  exit 1
-end
-
-options = Opts.parse(:servers)
-type_prompt = "Type of migration (servers, opencloud)?"
-
-if options[:function].nil?
-  options[:function] = CLI.prompt(type_prompt, valid_answers:
-                                  ["servers", "opencloud"],
-                                  default_answer: "opencloud")
-end
-options[:function] = options[:function].to_sym
-options[:config] = Opts.parse_config_file(options[:config_file])
-
-CloudFlock::Interface::CLI::App::Servers::Migrate.new(options)
+CloudFlock::App::ServerMigrate.new

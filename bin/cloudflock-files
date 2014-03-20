@@ -1,18 +1,6 @@
 #!/usr/bin/env ruby
 
+require 'cloudflock/app/files-migrate'
 $0 = 'cloudflock-files'
 
-require 'cloudflock/interface/cli/app/files'
-CLI = CloudFlock::Interface::CLI::Console
-Opts = CloudFlock::Interface::CLI::Opts
-
-# Trap C-c to kill the application in a friendly manner
-trap 'INT' do
-  puts "\nCaught SIGINT, exiting..."
-  exit 1
-end
-
-options = Opts.parse
-options[:config] = Opts.parse_config_file(options[:config_file])
-
-CloudFlock::Interface::CLI::App::Files.new(options)
+CloudFlock::App::FilesMigrate.new

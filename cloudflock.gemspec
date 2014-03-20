@@ -1,5 +1,5 @@
 $LOAD_PATH.unshift File.expand_path('../lib', __FILE__)
-require 'cloudflock/version'
+require 'cloudflock'
 
 Gem::Specification.new do |s|
   s.name = "cloudflock"
@@ -11,16 +11,17 @@ Gem::Specification.new do |s|
   s.email = "chris@chriswuest.com"
   s.homepage = "http://github.com/cwuest/cloudflock"
 
-  s.add_dependency('fog', '>=1.11.1')
-  s.add_dependency('multi_json')
-  s.add_dependency('expectr')
-  s.add_dependency('cpe')
+  s.add_dependency('fog', '~>1.20.0')
+  s.add_dependency('multi_json', '>=1.8.4')
+  s.add_dependency('cpe', '>= 0.5.0')
+  s.add_dependency('console-glitter', '~>0.1')
 
   s.files = `git ls-files lib`.split("\n")
   s.files += `git ls-files bin`.split("\n")
   s.files.reject! { |f| f.include?(".dev") }
 
-  s.executables = ['cloudflock', 'cloudflock-profile', 'cloudflock-servers']
+  s.executables = ['cloudflock', 'cloudflock-profile', 'cloudflock-servers',
+                   'cloudflock-files']
 
   s.license = 'Apache 2.0'
 end

@@ -1,5 +1,11 @@
 #!/usr/bin/env ruby
 
+# Trap C-c to kill the application without a stack trace
+trap 'INT' do
+  puts "\nCaught SIGINT, exiting..."
+  exit 1
+end
+
 current_path = File.expand_path('../', __FILE__)
 function = ARGV.shift.to_s
 bin = File.basename($0, '.dev')
