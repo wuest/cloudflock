@@ -1,44 +1,52 @@
 = CloudFlock
 
-CloudFlock is an API and toolchain aimed at automating tasks involved in
-migrating servers.
+CloudFlock is an API and toolchain aimed at making automating tasks involved in
+migrating servers easier.
 
 == Requirements
 
-CloudFlock assumes a Unix environment, and also assumes that the ssh(1) binary
-is present and accessible on the system.  It also depends on the following
-ruby libraries:
+CloudFlock aims to be supportable on as many platforms as possible, so
+depending on any system binaries is avoided.  If the following libraries are
+installed and functional, CloudFlock should work as expected:
   * fog
-  * expectr
   * cpe
+  * console-glitter
 
-== Using CloudFlock
+== CLI Toolchain
 
-CloudFlock has two main components.  There is CloudFLock, which is the API
-provided, and flock, which is the command line toolchain.
+The cloudflock utility is wizard-driven and attempts to be as easy to use as
+possible.  If any part of the process is unclear, then cloudflock has failed to
+do its job.  Each utility's command line options can be fully exposed by
+invoking:
+  cloudflock <utilityname> --help
 
-=== Flock
+=== Profile
 
-The flock utility can be invoked directly from the command line, assuming that
-gem installs executables in the path.  Flock has two main functions:
-  * profile will gather and report information about a remote host which might
-            be useful in determining migration parameters (target server, etc.)
-  * servers is the migration engine proper, which acts as a wizard, walking
-            through the steps of profiling, spinning up a new server (if
-	    applicable) and migrating data from the source host to the
-	    destination.
+The profile utility generates a report about a remote Unix host.
 
-=== CloudFlock
+=== Servers
 
-The API is presented relatively simply and should not be difficult to implement
-in projects.  The CLI applications under interface/cli should serve as
-implementation examples.
+The servers utility provides the functionality for automating host-level
+migrations of Unix hosts.  Migrations can be performed to already-provisioned
+hosts, or a host can be provisioned automatically on Rackspace.
+
+=== Files
+
+The files utility provides for migrating collections of files between Amazon
+S3, Rackspace Cloud Files and local directories.
+
+== API
+
+The CloudFlock API can be used to build services around CloudFlock's
+functionality.  The CLI applications under cloudflock/app should serve as
+reasonably straightforward reference implementations.
 
 == Contributions
 
-Please keep all pull requests to a single commit in order to make evaluation of
-changes easier.
+Please avoid pull requests against the master branch, which should represent
+the state of the current gem.  The 'working' branch should be used as a target
+for pull requests when in doubt.
 
 == Copyright
 
-Copyright (c) 2013 Rackspace US, Inc. See COPYING for details.
+Copyright (c) 2013,2014 Rackspace US, Inc. See COPYING for details.
