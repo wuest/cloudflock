@@ -3,8 +3,8 @@ require 'cloudflock'
 require 'console-glitter'
 
 module CloudFlock
-  # Public: The App module provides any functionality that will be used by all
-  # CLI applications.
+  # Public: The App module provides any functionality that is expected to be
+  # used by all CLI applications.
   module App extend self
     # Public: Parse options and expose global options which are expected to be
     # useful in any CLI application.
@@ -39,7 +39,9 @@ module CloudFlock
       opts.parse!(ARGV)
 
       options
-    rescue OptionParser::MissingArgument, OptionParser::InvalidOption => e
+    rescue OptionParser::MissingArgument, OptionParser::InvalidOption => error
+      puts error.message.capitalize
+      puts
       ARGV.clear
       ARGV.unshift('-?')
       retry
