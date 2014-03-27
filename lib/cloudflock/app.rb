@@ -6,6 +6,43 @@ module CloudFlock
   # Public: The App module provides any functionality that is expected to be
   # used by all CLI applications.
   module App extend self
+    include ConsoleGlitter
+
+    # Public: Check if an option is set; return the value if so, otherwise
+    # prompt the user for a response.
+    #
+    # options        - Hash containing options to test against.
+    # name           - The key in the options Hash expected to contain the
+    #                  response desired.
+    # prompt         - Prompt to present to the user.
+    # prompt_options - Options to pass along to ConsoleGlitter::UI#prompt.
+    #                  (default: {})
+    #
+    # Returns the contents of the options[name] or else a String if
+    # options[name] is nil.
+    def check_option(options, name, prompt, prompt_options = {})
+      return options[name] unless options[name].nil?
+
+      options[name] = UI.prompt(prompt, prompt_options)
+    end
+
+    # Public: Check if an option is set; return the value if so, otherwise
+    # prompt the user for a response.
+    #
+    # options        - Hash containing options to test against.
+    # name           - The key in the options Hash expected to contain the
+    #                  response desired.
+    # prompt         - Prompt to present to the user.
+    # prompt_options - Options to pass along to ConsoleGlitter::UI#prompt_yn.
+    #                  (default: {})
+    #
+    # Returns true or false.
+    def check_option_yn(options, name, prompt, prompt_options = {})
+      return(options[name] ? true : false) unless options[name].nil?
+
+      options[name] = UI.prompt_yn(prompt, prompt_options)
+    end
+
     # Public: Parse options and expose global options which are expected to be
     # useful in any CLI application.
     #

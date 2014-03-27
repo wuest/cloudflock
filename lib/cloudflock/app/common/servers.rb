@@ -11,6 +11,7 @@ module CloudFlock; module App
   module Common
     include Rackspace
     include ConsoleGlitter
+    include CloudFlock::App
     include CloudFlock::Remote
 
     # Path to the base directory in which any CloudFlock files will be stored.
@@ -66,31 +67,26 @@ module CloudFlock; module App
     # Returns a Hash containing information pertinent to logging in to a host.
     def define_host(host, name)
       host = host.dup
-      host[:hostname] ||= UI.prompt("#{name} host")
-      host[:port]     ||= UI.prompt("#{name} SSH port", default_answer: '22')
-      host[:username] ||= UI.prompt("#{name} username", default_answer: 'root')
-      host[:password] ||= UI.prompt("#{name} password", default_answer: '',
-                                    allow_empty: true)
+      check_option(host, :hostname, "#{name} host")
+      check_option(host, :port, "#{name} SSH port", default_answer: '22')
+      check_option(host, :username, "#{name} username", default_answer: 'root')
+      check_option(host, :password, "#{name} password",
+                   default_answer: '', allow_empty: true)
 
-      key = host[:ssh_key].to_s
       key_path = File.join(Dir.home, '.ssh', 'id_rsa')
       key_path = '' unless File.exists?(key_path)
-      unless File.file?(File.expand_path(key))
-        key = UI.prompt('SSH Key', default_answer: key_path, allow_empty: true)
-      end
-      host[:ssh_key] = key
+      check_option(host, :ssh_key, "#{name} SSH Key",
+                   default_answer: key_path, allow_empty: true)
 
       # Using sudo is only applicable if the user isn't root
       host[:sudo] = false if host[:username] == 'root'
-      if host[:sudo].nil?
-        host[:sudo] = UI.prompt_yn('Use sudo? (Y/N)', default_answer: 'Y')
-      end
+      check_option(host, :sudo, 'Use sudo? (Y/N)', default_answer: 'Y')
 
       # If non-root and using su, the root password is needed
       if host[:username] == 'root' || host[:sudo]
         host[:root_password] = host[:password]
       else
-        host[:root_password] ||= UI.prompt('Password for root')
+        check_option(host, :root_password, 'Password for root')
       end
 
       host
