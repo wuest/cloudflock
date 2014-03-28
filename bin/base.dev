@@ -2,5 +2,6 @@
 
 # If we are working in our development environment, prefer local libraries
 $:.unshift(File.expand_path('../../lib', __FILE__))
+$0 = File.basename($0, '.dev')
 
-load File.expand_path('../', __FILE__) + '/' + File.basename($0, '.dev')
+load File.expand_path('../', __FILE__) + '/' + $0

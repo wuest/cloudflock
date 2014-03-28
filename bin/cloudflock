@@ -8,7 +8,7 @@ end
 
 current_path = File.expand_path('../', __FILE__)
 function = ARGV.shift.to_s
-bin = File.basename($0, '.dev')
+bin = $0
 
 if function.match(/^[^-]/)
   target = "#{current_path}/#{bin}-#{function}"
