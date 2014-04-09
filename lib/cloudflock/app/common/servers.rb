@@ -597,7 +597,7 @@ module CloudFlock; module App
       destination_ips     = destination_profile.select_entries(/IP Usage/, /./)
       target_directories  = ['/etc']
 
-      puts "Found IPs: #{source_ips.join(', ')} "
+      puts "Source IPs: #{source_ips.join(', ')} "
       if UI.prompt_yn('Edit IP list? (Y/N)', default_answer: 'N')
         source_ips = edit_ip_list(source_ips)
       end
@@ -607,7 +607,7 @@ module CloudFlock; module App
         target_directories = edit_directory_list(target_directories)
       end
 
-      puts "Found IPs for #{shell.hostname}: #{destination_ips.join(', ')}"
+      puts "Destination IPs: #{destination_ips.join(', ')}"
       source_ips.each { |ip| remediate_ip(shell, ip, target_directories) }
     end
 
