@@ -44,13 +44,13 @@ module CloudFlock; module App; module Common
 
       paths = (0...platforms.length).map { |i| platforms[(0...i)].join('/') }
       mods  = (0...platforms.length).map do |i|
-        platforms[(0...i)].map(&:capitalize).join('::')
+        platforms[(0...i)].map(&:capitalize)
       end
 
       (0...paths.length).each do |index|
         begin
           require prefix + paths[index]
-          block.call(self.class.const_get(mods[index]))
+          block.call(mods[index].reduce(self.class) { |c,e| c.const_get(e) })
         rescue LoadError
         end
       end
