@@ -1,3 +1,4 @@
+require 'socket'
 require 'console-glitter'
 require 'cloudflock/app'
 require 'cloudflock/remote/ssh'
@@ -585,7 +586,9 @@ module CloudFlock; module App
       true
     end
 
-    # Public: Perform post-migration IP remediation in configuration files.
+    # Public: For each IP detected on the source host, perform IP remediation
+    # on the destination host post-migration.  Allow the list of IPs and the
+    # list of directories to target to be overridden by the user.
     #
     # shell   - SSH object logged in to the target host.
     # profile - Profile containing IPs gathered from the source host.
@@ -607,16 +610,34 @@ module CloudFlock; module App
         target_directories = edit_directory_list(target_directories)
       end
 
-      puts "Destination IPs: #{destination_ips.join(', ')}"
-      source_ips.each { |ip| remediate_ip(shell, ip, target_directories) }
+      puts "Detected IPs on the destination: #{destination_ips.join(', ')}"
+      source_ips.each do |ip|
+        appropriate = destination_ips.select do |dest_ip|
+          Addrinfo.ip(ip).ipv4_private? == Addrinfo.ip(dest_ip).ipv4_private?
+        end
+        suggested = appropriate.first || destination_ips.first
+        remediate_ip(shell, ip, suggested, target_directories)
+      end
     end
 
-    def remediate_ip(shell, ip, target_directories)
-      replace = UI.prompt("Replacement for #{ip}", allow_empty: true).strip
-      return if replace.empty?
+    # Public: Perform post-migration IP remediation in configuration files for
+    # a given IP.
+    #
+    # shell              - SSH object logged in to the target host.
+    # source_ip          - String containing the IP to replace.
+    # default_ip         - String containing an IP to suggest as the default
+    #                      replacement.
+    # target_directories - Array containing Strings of directories to target
+    #                      for IP remediation.
+    #
+    # Returns nothing.
+    def remediate_ip(shell, source_ip, default_ip, target_directories)
+      replace = UI.prompt("Replacement for #{source_ip}",
+                          allow_empty: true, default_answer: default_ip).strip
+      return if replace.empty? || target_directories.empty?
 
-      sed = "sed -i 's/#{ip}/#{replace}/g' {} \\;"
-      UI.spinner("Remediating IP: #{ip}") do
+      sed = "sed -i 's/#{source_ip}/#{replace}/g' {} \\;"
+      UI.spinner("Remediating IP: #{source_ip}") do
         target_directories.each do |dir|
           shell.as_root("find #{MOUNT_POINT}#{dir} -type f -exec #{sed}", 7200)
         end
