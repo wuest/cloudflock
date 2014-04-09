@@ -600,7 +600,7 @@ module CloudFlock; module App
       destination_ips     = destination_profile.select_entries(/IP Usage/, /./)
       target_directories  = ['/etc']
 
-      puts "Source IPs: #{source_ips.join(', ')} "
+      puts "Detected IPs on the source: #{source_ips.join(', ')} "
       if UI.prompt_yn('Edit IP list? (Y/N)', default_answer: 'N')
         source_ips = edit_ip_list(source_ips)
       end
