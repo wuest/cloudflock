@@ -356,6 +356,7 @@ module CloudFlock; module App
 
       UI.spinner('Performing rsync migration') do
         2.times do
+          # TODO: this dies in exceptional cases
           source_shell.as_root(rsync, 7200)
           source_shell.as_root("sed -i 's/\/var\/log//g' #{EXCLUSIONS}")
         end
@@ -401,7 +402,7 @@ module CloudFlock; module App
       location = dest_shell.as_root('which rsync')
       raise(NoRsyncAvailable, Errstr::NO_RSYNC) if location.empty?
 
-      scp = "scp #{SSH_ARGUMENTS} -i #{PRIVATE_KEY} #{host}:#{location} " + 
+      scp = "scp #{SSH_ARGUMENTS} -i #{PRIVATE_KEY} #{host}:#{location} " +
             "#{DATA_DIR}/"
 
       source_shell.as_root(scp)
@@ -582,6 +583,44 @@ module CloudFlock; module App
       steps.each { |step| shell.as_root(step) }
 
       true
+    end
+
+    # Public: Perform post-migration IP remediation in configuration files.
+    #
+    # shell   - SSH object logged in to the target host.
+    # profile - Profile containing IPs gathered from the source host.
+    #
+    # Returns nothing.
+    def configure_ips(shell, profile)
+      destination_profile = CloudFlock::Task::ServerProfile.new(shell)
+      source_ips          = profile.select_entries(/IP Usage/, /./)
+      destination_ips     = destination_profile.select_entries(/IP Usage/, /./)
+      target_directories  = ['/etc']
+
+      puts "Found IPs: #{source_ips.join(', ')} "
+      if UI.prompt_yn('Edit IP list? (Y/N)', default_answer: 'N')
+        source_ips = edit_ip_list(source_ips)
+      end
+
+      puts 'By default only config files under /etc will be remediated.  '
+      if UI.prompt_yn('Edit remediation targets? (Y/N)', default_answer: 'N')
+        target_directories = edit_directory_list(target_directories)
+      end
+
+      puts "Found IPs for #{shell.hostname}: #{destination_ips.join(', ')}"
+      source_ips.each { |ip| remediate_ip(shell, ip, target_directories) }
+    end
+
+    def remediate_ip(shell, ip, target_directories)
+      replace = UI.prompt("Replacement for #{ip}", allow_empty: true).strip
+      return if replace.empty?
+
+      sed = "sed -i 's/#{ip}/#{replace}/g' {} \\;"
+      UI.spinner("Remediating IP: #{ip}") do
+        target_directories.each do |dir|
+          shell.as_root("find #{MOUNT_POINT}#{dir} -type f -exec #{sed}", 7200)
+        end
+      end
     end
 
     # Public: Display a failure message to the user and prompt whether to

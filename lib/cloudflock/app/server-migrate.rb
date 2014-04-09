@@ -27,6 +27,7 @@ module CloudFlock; module App
 
       source_host.logout!
       cleanup_destination(dest_host, profile.cpe)
+      configure_ips(dest_host, profile)
 
       puts UI.bold { UI.blue { "Migration complete to #{dest_host.hostname}"} }
     rescue
@@ -129,29 +130,31 @@ module CloudFlock; module App
       exclusions.to_s
     end
 
-    # Internal: Allow editing of the default exclusions.  Set up a temporary
-    # file, open it in the current host's editor, and read it back in after
-    # finished.
+    # Internal: Allow editing of the default exclusions for a given platform.
     #
     # exclusions - String containing exclusions.
     #
-    # BUG: Works only on POSIX-compliant hosts; needs work to support Windows.
-    #
     # Returns a String.
     def edit_exclusions(exclusions)
-      editor = File.exists?('/usr/bin/editor') ? '/usr/bin/editor' : 'vi'
+      temp_file('exclusions', exclusions)
+    end
 
-      temp = Tempfile.new('cloudflock_exclusions')
-      temp.write(exclusions)
-      temp.close
+    # Internal: Allow editing of a list of IPs.
+    #
+    # ips - Array containing Strings of IPs.
+    #
+    # Returns an Array containing Strings of IPs.
+    def edit_ip_list(ips)
+      temp_file('ips', ips.join("\n")).split(/\s+/)
+    end
 
-      system("#{editor} #{temp.path}")
-      temp.open
-      exclusions = temp.read
-      temp.close
-      temp.unlink
-
-      exclusions
+    # Internal: Allow editing of a list of target directories.
+    #
+    # dirs - Array containing Strings of paths.
+    #
+    # Returns an Array containing Strings of paths.
+    def edit_directory_list(dirs)
+      temp_file('directories', dirs.join("\n")).split(/\s+/)
     end
 
     # Internal: Generate a String describing a host's operating system.
@@ -181,6 +184,31 @@ module CloudFlock; module App
     # Returns a String.
     def profile_hdd_string(profile)
       profile.select_entries(/Storage/, /Usage/).join(' ').strip
+    end
+
+    # Internal: Set up a temporary file, open it for editing locally, and read
+    # it back in after finished.
+    #
+    # name    - Name to append to the temporary file's path.
+    # content - Content with which the temporary file should be pre-populated.
+    #
+    # BUG: Works only on POSIX-compliant hosts; needs work to support Windows.
+    #
+    # Returns a String.
+    def temp_file(name, content)
+      editor = File.exists?('/usr/bin/editor') ? '/usr/bin/editor' : 'vi'
+
+      temp = Tempfile.new("cloudflock_#{name}")
+      temp.write(content)
+      temp.close
+
+      system("#{editor} #{temp.path}")
+      temp.open
+      result = temp.read
+      temp.close
+      temp.unlink
+
+      result
     end
 
     # Internal: Set up an OptionParser object to recognize options specific to
