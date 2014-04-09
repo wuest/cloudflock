@@ -645,14 +645,7 @@ module CloudFlock; module Task
     #
     # Returns true if the IP falls within the private range, false otherwise.
     def rfc1918?(ip)
-      octets = ip.split(/\./)
-      if octets[0] == '10' || (octets[0] == '192' && octets[1] == '168')
-        return true
-      elsif octets[0] == '172' && (16..31).include?(octets[1].to_i)
-        return true
-      end
-
-      false
+      Addrinfo.ip(ip).ipv4_private?
     end
   end
 end; end

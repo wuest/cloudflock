@@ -1,4 +1,5 @@
 require 'cloudflock/remote/ssh'
+require 'socket'
 require 'cpe'
 
 module CloudFlock; module Target; module Servers
@@ -376,12 +377,7 @@ module CloudFlock; module Target; module Servers
     #
     # Returns either the symbol :public or :private.
     def rfc1918?(ip)
-      octets = ip.split(/\./)
-      if octets[0] == '10' || (octets[0] == '192' && octets[1] == '168')
-        return :private
-      elsif octets[0] == '172' && octets[1].to_i >= 16 && octets[1].to_i <= 31
-        return :private
-      end
+      return :private if Addrinfo.ip(ip).ipv4_private?
 
       :public
     end
