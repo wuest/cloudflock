@@ -234,17 +234,32 @@ module CloudFlock; module App
     #
     # Returns a Hash with information necessary to log in to the new host.
     def provision_compute(api, managed, compute_spec)
-      host = UI.spinner("Waiting for #{compute_spec[:name]} to provision") do
-        host = api.servers.create(compute_spec)
-        host.wait_for { ready? }
-        host
-      end
+      host = api.servers.create(compute_spec)
+      provision_wait(host, compute_spec[:name])
       managed_wait(host) if managed
       rescue_compute(host)
 
       { username: 'root', port: '22' }.merge(get_host_details(host))
     rescue Fog::Errors::TimeoutError, Excon::Errors::Timeout
       retry if retry_prompt('Provisioning failed.')
+      raise
+    end
+
+    # Public: Wait for a Rackspace Cloud instance to be provisioned.
+    #
+    # host - Fog::Compute instance.
+    # name - String containing the name of the server.
+    #
+    # Returns nothing.
+    def provision_wait(host, name)
+      UI.spinner("Waiting for #{name} to provision") do
+        host.wait_for { ready? }
+      end
+    rescue Fog::Errors::TimeoutError, Excon::Errors::Timeout
+      error = UI.red { 'Provisioning is taking an unusually long time.' }
+
+      retry if UI.prompt_yn("#{error}  Continue waiting? (Y/N)",
+                            default_answer: 'Y')
       raise
     end
 
