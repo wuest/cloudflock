@@ -77,6 +77,9 @@ module CloudFlock; module App
       end
 
       ssh_connect(dest_host)
+    rescue Excon::Errors::Unauthorized
+      retry if UI.prompt_yn('Login failed.  Retry? (Y/N)', default_answer: 'Y')
+      exit
     end
 
     # Internal: Provision a new instance on the Rackspace cloud and return
