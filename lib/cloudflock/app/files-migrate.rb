@@ -52,30 +52,35 @@ module CloudFlock; module App
     #
     # Returns a CloudFlock::Remote::Files object.
     def define_api(desc, create = false)
-      store   = {}
       query   = "#{desc} provider (rackspace, aws, local)"
       answers = [/^(?:rackspace|aws|local)$/i]
 
       provider = UI.prompt(query, valid_answers: answers)
 
-      case provider
+      api = case provider
       when /rackspace/i
-        store[:provider] = 'Rackspace'
-        store[:rackspace_username] = UI.prompt('Rackspace username')
-        store[:rackspace_api_key] = UI.prompt('Rackspace API key')
+        define_rackspace_api
       when /aws/i
-        store[:provider] = 'AWS'
-        store[:aws_access_key_id] = UI.prompt('AWS Access Key ID')
-        store[:aws_secret_access_key] = UI.prompt('AWS secret access key')
+        {
+          provider: 'AWS',
+          aws_access_key_id: UI.prompt('AWS Access Key ID'),
+          aws_secret_access_key: UI.prompt('AWS secret access key')
+        }
       when /local/i
-        store[:provider] = 'local'
-        store[:local_root] = UI.prompt("#{desc} location")
-        return CloudFlock::Remote::Files.new(store)
+        {
+          provider:   'local',
+          local_root: UI.prompt("#{desc} location")
+        }
       end
 
-      api = CloudFlock::Remote::Files.new(store)
+      store = api.merge(define_rackspace_files_region(api))
+      setup_object_store(CloudFlock::Remote::Files.new(store), desc, create)
+    end
 
-      options = api.directories.map do |dir|
+    def setup_object_store(store, desc, create)
+      return store if store.local?
+
+      options = store.directories.map do |dir|
         { name: dir.key, files: dir.count.to_s }
       end
       valid = options.reduce([]) { |c,e| c << e[:name] }
@@ -83,15 +88,15 @@ module CloudFlock; module App
       puts UI.build_grid(options, name: "Directory name", files: "File count")
       if create
         selected = UI.prompt("#{desc} directory")
-        unless api.directories.select { |dir| dir.key == selected }.any?
-          api.directories.create(key: selected)
+        unless store.directories.select { |dir| dir.key == selected }.any?
+          store.directories.create(key: selected)
         end
       else
         selected = UI.prompt("#{desc} directory", valid_answers: valid)
       end
-      api.directory = selected
+      store.directory = selected
 
-      api
+      store
     end
 
     # Internal: Set up queue and Mutexes, create threads to manage the transfer
@@ -212,6 +217,7 @@ module CloudFlock; module App
             while file = mutexes[:queue].synchronize { file_queue.pop }
               content = File.read(file[:path])
               dest_store.create(key: file[:name], body: content)
+              puts "\n \033[031m *** #{Thread::current.inspect} unlinking #{content.length}\033[0m"
               File.unlink(file[:path]) if file[:temp]
             end
           end

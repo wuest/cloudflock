@@ -13,23 +13,29 @@ module CloudFlock; module App
     # Returns a Hash containing information necessary to establish an API
     # session.
     def define_rackspace_api
-      api = { provider: 'rackspace' }
+      {
+        provider:           'rackspace',
+        rackspace_username: UI.prompt('Rackspace Cloud Username'),
+        rackspace_api_key:  UI.prompt('Rackspace Cloud API key'),
+        rackspace_region:   define_rackspace_region
+      }
+    end
 
-      api[:rackspace_username] = UI.prompt('Rackspace Cloud Username')
-      api[:rackspace_api_key]  = UI.prompt('Rackspace Cloud API key')
-
-      region = UI.prompt('Account Region (us, uk)',
-                         valid_answers: [/^u[sk]$/i])
-      region.gsub!(/$/, '_AUTH_ENDPOINT')
-      api[:rackspace_region] = Fog::Rackspace.const_get(region.upcase)
-
-      api
+    # Public: Determine which Rackspace public endpoint should be used.
+    #
+    # Returns a String.
+    def define_rackspace_region
+      countries = [/^u[sk]$/i]
+      region = UI.prompt('Account Region (us, uk)', valid_answers: countries)
+      Fog::Rackspace.const_get(region.upcase + '_AUTH_ENDPOINT')
     end
 
     # Public: Wrap define_rackspace_service_region, specifying
     # 'cloudServersOpenStack' as the service type.
     #
     # api     - Authenticated Fog API instance.
+    #
+    # Returns a Hash.
     def define_rackspace_cloudservers_region(api)
       api.merge(define_rackspace_service_region(api, 'cloudServersOpenStack'))
     end
@@ -38,6 +44,8 @@ module CloudFlock; module App
     # the service type.
     #
     # api     - Authenticated Fog API instance.
+    #
+    # Returns a Hash.
     def define_rackspace_files_region(api)
       api.merge(define_rackspace_service_region(api, 'cloudFiles'))
     end
