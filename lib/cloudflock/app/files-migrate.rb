@@ -77,6 +77,14 @@ module CloudFlock; module App
       setup_object_store(CloudFlock::Remote::Files.new(store), desc, create)
     end
 
+    # Internal: Connect to an object store and determine the directory on which
+    # to act.
+    #
+    # store  - Fog::Remote::Files object.
+    # desc   - Description of the data store for display purposes.
+    # create - Whether to create non-existing locations.
+    #
+    # Returns a CloudFlock::Remote::Files object.
     def setup_object_store(store, desc, create)
       return store if store.local?
 
