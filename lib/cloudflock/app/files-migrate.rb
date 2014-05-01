@@ -129,16 +129,18 @@ module CloudFlock; module App
       down_threads = options[:download_threads] || DOWNLOAD_THREADS
 
       mutexes[:ongoing].lock
+
       destination = Thread.new do
         manage_destination(dest_store, mutexes, down_threads)
       end
-
       source = Thread.new do
         manage_source(source_store, mutexes, up_threads)
-        mutexes[:ongoing].unlock
       end
 
-      [source, destination].each(&:join)
+      [source].each(&:join)
+      mutexes[:ongoing].unlock
+
+      [destination].each(&:join)
     end
 
     # Internal: Create and observe threads which download files from a
