@@ -124,17 +124,18 @@ module CloudFlock; module App
     #
     # Returns nothing.
     def files_migrate(source_store, dest_store, options = {})
-      file_queue       = []
-      mutexes          = { queue: Mutex.new, finished: Mutex.new }
-      up_threads       = options[:upload_threads] || UPLOAD_THREADS
-      down_threads     = options[:download_threads] || DOWNLOAD_THREADS
+      mutexes      = { queue: Queue.new, ongoing: Mutex.new }
+      up_threads   = options[:upload_threads]   || UPLOAD_THREADS
+      down_threads = options[:download_threads] || DOWNLOAD_THREADS
 
-      source = Thread.new do
-        manage_source(source_store, file_queue, mutexes, up_threads)
+      mutexes[:ongoing].lock
+      destination = Thread.new do
+        manage_destination(dest_store, mutexes, down_threads)
       end
 
-      destination = Thread.new do
-        manage_destination(dest_store, file_queue, mutexes, down_threads)
+      source = Thread.new do
+        manage_source(source_store, mutexes, up_threads)
+        mutexes[:ongoing].unlock
       end
 
       [source, destination].each(&:join)
@@ -144,14 +145,12 @@ module CloudFlock; module App
     # non-local file store.  If the files exist locally, simply generate a list
     # of the files in queue.
     #
-    # source_store - CloudFlock::Remote::Files object set up to pull files from
+    # store        - CloudFlock::Remote::Files object set up to pull files from
     #                a source directory.
-    # file_queue   - Array in which details regarding files to be transferred
-    #                will be stored.
     # mutexes      - Hash containing two Mutexes:
-    #                :queue    - Coordinates access to file_queue.
-    #                :finished - Locked immediately, only unlocked once all
-    #                            files are queued for transfer.
+    #                :queue   - Queue to coordinate file access.
+    #                :ongoing - Indicates that the transfer is ongoing when
+    #                           locked.
     # thread_count - Hash optionally containing overrides for the number of
     #                upload and download threads to use for transfer
     #                concurrency. (default: {})
@@ -161,38 +160,30 @@ module CloudFlock; module App
     #                                    Overrides DOWNLOAD_THREADS constant.
     #
     # Returns nothing.
-    def manage_source(source_store, file_queue, mutexes, thread_count)
-      mutexes[:finished].lock
-
-      if source_store.local?
-        source_store.each_file do |file|
-          mutexes[:queue].synchronize do
-            file_queue << { path: "#{source_store.prefix}/#{file.key}",
-                            name: file.key, temp: false }
-          end
+    def manage_source(store, mutexes, thread_count)
+      if store.local?
+        store.each_file do |file|
+          node = File.new("#{store.prefix}/#{file.key}")
+          mutexes[:queue] << { file: node, name: file.key, temp: false }
         end
       else
         source_threads  = []
         file_list_mutex = Mutex.new
-        file_list       = source_store.file_list
+        file_list       = store.file_list
 
         thread_count.times do
           source_threads << Thread.new do
             while file = file_list_mutex.synchronize { file_list.pop } do
               temp = Tempfile.new(file.gsub(/\//, ''))
-              temp.write(source_store.get_file(file))
+              temp.write(store.get_file(file))
               temp.close
-              mutexes[:queue].synchronize do
-                file_queue << { path: temp.path, name: file, temp: true }
-              end
+              mutexes[:queue] << { file: temp, name: file, temp: true }
             end
           end
         end
 
         source_threads.each(&:join)
       end
-
-      mutexes[:finished].unlock
     end
 
     # Internal: Create and observe threads which download files from a
@@ -201,12 +192,10 @@ module CloudFlock; module App
     #
     # dest_store   - CloudFlock::Remote::Files object set up to upload files to
     #                a destination directory.
-    # file_queue   - Array from which to retrieve details regarding files to be
-    #                transferred.
     # mutexes      - Hash containing two Mutexes:
-    #                :queue    - Coordinates access to file_queue.
-    #                :finished - Locked immediately, only unlocked once all
-    #                            files are queued for transfer.
+    #                :queue   - Queue to coordinate file access.
+    #                :ongoing - Indicates that the transfer is ongoing when
+    #                           locked.
     # thread_count - Hash optionally containing overrides for the number of
     #                upload and download threads to use for transfer
     #                concurrency. (default: {})
@@ -216,23 +205,39 @@ module CloudFlock; module App
     #                                    Overrides DOWNLOAD_THREADS constant.
     #
     # Returns nothing.
-    def manage_destination(dest_store, file_queue, mutexes, thread_count)
+    def manage_destination(dest_store, mutexes, thread_count)
       dest_threads = []
 
       thread_count.times do
         dest_threads << Thread.new do
-          while mutexes[:finished].locked?
-            while file = mutexes[:queue].synchronize { file_queue.pop }
-              content = File.read(file[:path])
-              dest_store.create(key: file[:name], body: content)
-              puts "\n \033[031m *** #{Thread::current.inspect} unlinking #{content.length}\033[0m"
-              File.unlink(file[:path]) if file[:temp]
-            end
-          end
+          upload_thread(dest_store, mutexes)
         end
       end
 
       dest_threads.each(&:join)
+    end
+
+    # Internal: Upload files from a Queue to a given object store.
+    #
+    # dest_store   - CloudFlock::Remote::Files object set up to upload files to
+    #                a destination directory.
+    # mutexes      - Hash containing two Mutexes:
+    #                :queue   - Queue to coordinate file access.
+    #                :ongoing - Indicates that the transfer is ongoing when
+    #                           locked.
+    #
+    # Returns nothing.
+    def upload_thread(dest_store, mutexes)
+      while mutexes[:ongoing].locked?
+        while file = mutexes[:queue].pop(true)
+          file[:file].open if file[:temp]
+          dest_store.create(key: file[:name], body: file[:file].read)
+          file[:file].close
+        end
+      end
+    rescue ThreadError
+      sleep 0.1
+      retry
     end
 
     # Internal: Set up an OptionParser object to recognize options specific to
