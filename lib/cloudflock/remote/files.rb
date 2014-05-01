@@ -63,6 +63,9 @@ module CloudFlock; module Remote
     # Returns a String.
     def get_file(file)
       @files.files.get(file).body
+    rescue Excon::Errors::Timeout, Fog::Storage::Rackspace::ServiceError
+      # Triggered by server and request timeouts respectively.
+      retry
     end
 
     # Public: Create a file in the current directory.
@@ -74,7 +77,8 @@ module CloudFlock; module Remote
     # Returns nothing.
     def create(file_spec)
       @files.files.create(file_spec)
-    rescue Excon::Errors::Timeout
+    rescue Excon::Errors::Timeout, Fog::Storage::Rackspace::ServiceError
+      # Triggered by server and request timeouts respectively.
       retry
     end
 
