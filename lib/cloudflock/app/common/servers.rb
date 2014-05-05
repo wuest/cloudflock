@@ -76,8 +76,8 @@ module CloudFlock; module App
 
       key_path = File.join(Dir.home, '.ssh', 'id_rsa')
       key_path = '' unless File.exists?(key_path)
-      check_option(host, :ssh_key, "#{name} SSH Key",
-                   default_answer: key_path, allow_empty: true)
+      check_option_fs(host, :ssh_key, "#{name} SSH Key",
+                      default_answer: key_path, allow_empty: true)
 
       # Using sudo is only applicable if the user isn't root
       host[:sudo] = false if host[:username] == 'root'
