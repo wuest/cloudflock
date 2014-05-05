@@ -26,6 +26,24 @@ module CloudFlock
       options[name] = UI.prompt(prompt, prompt_options)
     end
 
+    # Public: Wrap check_option, allowing for filesystem autocompletion in user
+    # response if the option is not set.
+    #
+    # options        - Hash containing options to test against.
+    # name           - The key in the options Hash expected to contain the
+    #                  response desired.
+    # prompt         - Prompt to present to the user.
+    # prompt_options - Options to pass along to ConsoleGlitter::UI#prompt.
+    #                  (default: {})
+    #
+    # Returns the contents of the options[name] or else a String if
+    # options[name] is nil.
+    def check_option_fs(options, name, prompt, prompt_options = {})
+      return options[name] unless options[name].nil?
+
+      options[name] = UI.prompt_filesystem(prompt, prompt_options)
+    end
+
     # Public: Check if an option is set; return the value if so, otherwise
     # prompt the user for a response.
     #
