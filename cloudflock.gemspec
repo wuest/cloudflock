@@ -13,7 +13,7 @@ Gem::Specification.new do |s|
 
   s.add_runtime_dependency('fog', '~>1.21')
   s.add_runtime_dependency('cpe', '~> 0.5', '>= 0.5.0')
-  s.add_runtime_dependency('console-glitter', '~>0.1', '>=0.1.4')
+  s.add_runtime_dependency('console-glitter', '~>0.2', '>=0.2.0')
 
   s.files = `git ls-files lib`.split("\n")
   s.files += `git ls-files bin`.split("\n")
