@@ -10,8 +10,9 @@ module CloudFlock
   module Remote
     class SSH
       module Errstr
-        NOHOST        = 'No host specified'
-        INVALID_HOST  = 'Unable to look up host: %s'
+        NOHOST         = 'No host specified'
+        INVALID_HOST   = 'Unable to look up host: %s'
+        CANNOT_CONNECT = 'Unable to connect to host: %s'
       end
     end
   end
