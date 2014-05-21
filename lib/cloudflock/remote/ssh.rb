@@ -57,6 +57,7 @@ module CloudFlock; module Remote
     def initialize(args = {})
       @options = sanitize_arguments(DEFAULT_ARGS.merge(args))
       start_session
+      start_keepalive_thread
     end
 
     # Public: Return the hostname of the host.
@@ -259,9 +260,31 @@ module CloudFlock; module Remote
     # Sets @ssh.
     #
     # Returns nothing.
+    #
+    # Raises TooManyRetries if retry_count is greater than 4.
     def start_session
       ssh_opts = filter_ssh_options(options)
       @ssh = Net::SSH.start(options[:hostname], options[:username], ssh_opts)
+    rescue Net::SSH::Disconnect
+      retry_count = retry_count.to_i + 1
+      sleep 30 and retry if retry_count < 5
+      raise(SSHCannotConnect, Errstr::CANNOT_CONNECT % options[:hostname])
+    end
+
+    # Internal: Creates a thread which sends a keepalive message every 10
+    # seconds.
+    #
+    # Sets @keepalive.
+    #
+    # Returns nothing.
+    def start_keepalive_thread
+      @keepalive.kill if @keepalive.is_a?(Thread)
+      @keepalive = Thread.new do
+        loop do
+          sleep 10
+          @ssh.send_global_request('keepalive@openssh.com')
+        end
+      end
     end
   end
 end; end
