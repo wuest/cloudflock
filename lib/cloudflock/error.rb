@@ -7,7 +7,8 @@ module CloudFlock
 
   module Remote
     class SSH
-      class InvalidHostname < StandardError; end
+      class InvalidHostname  < StandardError; end
+      class SSHCannotConnect < StandardError; end
     end
   end
 end
