@@ -21,6 +21,9 @@ module CloudFlock; module Remote
                     '-o ConnectTimeout=15 '            \
                     '-o ServerAliveInterval=30'
 
+    # Public: Hash containing always-set options for Net::SSH
+    NET_SSH_OPTIONS = { user_known_hosts_file: '/dev/null', paranoid: false }
+
     # Public: Prompt to be set on a host upon successful login.
     PROMPT = '@@CLOUDFLOCK@@'
 
@@ -237,7 +240,7 @@ module CloudFlock; module Remote
     # :key_passphrase defined.
     def filter_ssh_options(args)
       valid_arguments = [:port, :password, :key_data, :key_passphrase]
-      args.select { |opt| valid_arguments.include? opt }
+      args.select { |opt| valid_arguments.include? opt }.merge(NET_SSH_OPTIONS)
     end
 
     # Internal: Resolve the hostname provided and return the network address to
