@@ -11,7 +11,8 @@ Gem::Specification.new do |s|
   s.email       = 'chris@chriswuest.com'
   s.homepage    = 'http://github.com/cwuest/cloudflock'
 
-  s.add_runtime_dependency('fog', '~>1.21')
+  s.add_runtime_dependency('fog-json', '>= 0')
+  s.add_runtime_dependency('fog', '~> 1.22', '>= 1.22.1')
   s.add_runtime_dependency('cpe', '~> 0.5', '>= 0.5.0')
   s.add_runtime_dependency('console-glitter', '~>0.2', '>=0.2.1')
 
