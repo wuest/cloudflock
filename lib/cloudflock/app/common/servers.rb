@@ -71,8 +71,8 @@ module CloudFlock; module App
       check_option(host, :hostname, "#{name} host")
       check_option(host, :port, "#{name} SSH port", default_answer: '22')
       check_option(host, :username, "#{name} username", default_answer: 'root')
-      check_option(host, :password, "#{name} password",
-                   default_answer: '', allow_empty: true)
+      check_option_pw(host, :password, "#{name} password",
+                      default_answer: '', allow_empty: true)
 
       key_path = File.join(Dir.home, '.ssh', 'id_rsa')
       key_path = '' unless File.exists?(key_path)
@@ -87,7 +87,7 @@ module CloudFlock; module App
       if host[:username] == 'root' || host[:sudo]
         host[:root_password] = host[:password]
       else
-        check_option(host, :root_password, 'Password for root')
+        check_option_pw(host, :root_password, 'Password for root')
       end
 
       host
