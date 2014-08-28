@@ -39,7 +39,7 @@ module CloudFlock; module App
     def define_rackspace_cloudservers_region(api)
       api.merge(define_rackspace_service_region(api, 'cloudServersOpenStack'))
     end
-    
+
     # Public: Wrap define_rackspace_service_region, specifying 'cloudFiles' as
     # the service type.
     #

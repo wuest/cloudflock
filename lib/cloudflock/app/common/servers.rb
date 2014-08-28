@@ -93,6 +93,57 @@ module CloudFlock; module App
       host
     end
 
+    # Public: Attempt to log in to a source server to be migrated.
+    #
+    # source_host - Hash containing any options which may pertain to the host.
+    #
+    # Returns a CloudFlock::Remote::SSH object logged in to a remote host.
+    def connect_source(source_host)
+      connect_host(source_host, :define_source)
+    end
+
+    # Public: Attempt to log in to a destination server to which data will be
+    # migrated.
+    #
+    # dest_host - Hash containing any options which may pertain to the host.
+    #
+    # Returns a CloudFlock::Remote::SSH object logged in to a remote host.
+    def connect_destination(dest_host)
+      connect_host(source_host, :define_destination)
+    end
+
+    # Public: Attempt to log in to a target host.
+    #
+    # host          - Hash containing any applicable options mappings for the
+    #                 server in question.
+    # define_method - Name of the method to call when re-defining host to
+    #                 recover from an exception.
+    #
+    # Returns a CloudFlock::Remote::SSH object logged in to the target host.
+    def connect_host(host, define_method)
+      UI.spinner("Logging in to #{host[:hostname]}") do
+        SSH.new(host)
+      end
+    rescue CloudFlock::Remote::SSH::InvalidHostname => e
+      error = "Cannot look up #{host[:hostname]}"
+      retry_exit(e.message, 'Try another host? (Y/N)')
+
+      host = self.send(define_method, (host.merge({hostname: nil})))
+      retry
+    rescue CloudFlock::Remote::SSH::SSHCannotConnect => e
+      retry if retry_prompt(e.message)
+      retry_exit('', 'Try another host? (Y/N)')
+
+      host = self.send(define_method, (host.merge({hostname: nil})))
+      retry
+    rescue Net::SSH::AuthenticationFailed => e
+      retry_exit("Cannot log in as #{host[:username]}.")
+
+      options = {username: nil, password: nil}
+      host = self.send(define_method, (host.merge(options)))
+      retry
+    end
+
     # Public: Have the user select from a list of available images to provision
     # a new host.
     #
@@ -142,8 +193,8 @@ module CloudFlock; module App
       end
       image_list.map! { |image| { name: image.name, id: image.id } }
     rescue Excon::Errors::Timeout
-      retry if retry_prompt('Unable to fetch a list of available images.')
-      raise
+      retry_exit('Unable to fetch a list of available images.')
+      retry
     end
 
     # Public: Have the user select from a list of available flavors to
@@ -191,6 +242,9 @@ module CloudFlock; module App
         flavor_list.select! { |flavor| flavor.disk > hdd && flavor.ram > ram }
       end
       flavor_list.map! { |flavor| { name: flavor.name, id: flavor.id } }
+    rescue Fog::Errors::TimeoutError, Excon::Errors::Timeout
+      retry_exit('Unable to fetch flavor list.')
+      retry
     end
 
     # Public: Prompt user for the name of a new host to be created, presenting
@@ -242,7 +296,7 @@ module CloudFlock; module App
       { username: 'root', port: '22' }.merge(get_host_details(host))
     rescue Fog::Errors::TimeoutError, Excon::Errors::Timeout
       retry if retry_prompt('Provisioning failed.')
-      raise
+      exit
     end
 
     # Public: Wait for a Rackspace Cloud instance to be provisioned.
@@ -260,7 +314,7 @@ module CloudFlock; module App
 
       retry if UI.prompt_yn("#{error}  Continue waiting? (Y/N)",
                             default_answer: 'Y')
-      raise
+      exit
     end
 
     # Public: Wait for a Rackspace Cloud instance with Managed service level to
@@ -277,6 +331,11 @@ module CloudFlock; module App
       UI.spinner('Waiting for managed cloud automation to complete') do
         ssh.as_root("while [ ! -f #{finished} ]; do sleep 5; done", 3600)
       end
+    rescue Timeout::Error
+      retry if retry_prompt('Managed cloud automation timed out.')
+      host.destroy if UI.prompt_yn('Delete newly created host?')
+
+      exit
     end
 
     # Public: Get details for a Fog::Compute instance.
@@ -305,10 +364,12 @@ module CloudFlock; module App
         retry if retry_prompt('Timeout exceeded waiting for the host.')
 
         host.destroy
-        raise
+        exit
       end
     rescue Excon::Errors::Timeout
-      retry if retry_prompt('API timed out waiting for server status update.')
+      retry if retry_prompt('API timed out.', 'Continue waiting?')
+
+      exit
     end
 
     # Public: Connect to a host via SSH, automatically retrying a set number of
@@ -333,8 +394,20 @@ module CloudFlock; module App
         end
       end
     rescue Net::SSH::Disconnect
-      retry if retry_prompt('Unable to establish a connection.')
-      raise
+      retry_exit('Unable to establish a connection.')
+      retry
+    end
+
+    # Public: Get details for a Fog::Compute instance.
+    #
+    # host - Fog::Compute instance.
+    #
+    # Returns a Hash containing the host's address and root password.
+    def destroy_host(host)
+      host.destroy
+    rescue Fog::Errors::TimeoutError, Excon::Errors::Timeout
+      retry_exit('API Timed out trying to delete the host.')
+      retry
     end
 
     # Public: Perform the final preperatory steps necessary as well as the
@@ -346,37 +419,113 @@ module CloudFlock; module App
     #
     # Returns a String containing the host's new ssh public key.
     def migrate_server(source_shell, dest_shell, exclusions)
-      pubkey = UI.spinner('Generating a keypair for the source environment') do
-        generate_keypair(source_shell)
-      end
-
-      UI.spinner('Preparing the destination environment') do
-        setup_destination(dest_shell, pubkey)
-      end
-
-      rsync = UI.spinner('Preparing the source environment') do
-        location = setup_source(source_shell, exclusions)
-        if location.empty?
-          location = transfer_rsync(source_shell, dest_shell)
-        end
-
-        location
-      end
-
-      dest_address = UI.spinner('Checking for ServiceNet') do
-        determine_target_address(source_shell, dest_shell)
-      end
+      pubkey = prepare_source_ssh_keygen(source_shell)
+      prepare_source_exclusions(source_shell, exclusions)
+      setup_destination(dest_shell, pubkey)
+      rsync = prepare_source_rsync(source_shell, dest_shell)
+      dest_address = prepare_source_servicenet(source_shell, dest_shell)
 
       rsync = "#{rsync} -azP -e 'ssh #{SSH_ARGUMENTS} -i #{PRIVATE_KEY}' " +
               "--exclude-from='#{EXCLUSIONS}' / #{dest_address}:#{MOUNT_POINT}"
+      rsync_migrate(source_shell, rsync)
+    end
 
+    # Public: Generate a new ssh keypair to be used for the migration.
+    #
+    # shell  - SSH object logged in to the source host.
+    #
+    # Returns a String containing the new public key.
+    def prepare_source_ssh_keygen(shell)
+      UI.spinner('Generating a keypair for the source environment') do
+        generate_keypair(shell)
+      end
+    rescue Timeout::Error
+      retry_exit('Host is taking a long time generating an ssh keypair.')
+      retry
+    end
+
+    # Public: Generate a new ssh keypair to be used for the migration.
+    #
+    # shell      - SSH object logged in to the source host.
+    # exclusions - String containing the exclusions list for the source host.
+    #
+    # Returns a String containing the new public key.
+    def prepare_source_exclusions(shell, exclusions)
+      UI.spinner('Setting up migration exclusions') do
+        shell.as_root("cat <<EOF> #{EXCLUSIONS}\n#{exclusions}\nEOF")
+      end
+    rescue Timeout::Error
+      retry_exit('Host is taking a long time to respond.')
+      retry
+    end
+
+    # Public: Generate a new ssh keypair to be used for the migration.
+    #
+    # source_shell - SSH object logged in to the source host.
+    # dest_shell   - SSH object logged in to the destination host.
+    #
+    # Returns a String containing the location rsync on the source host.
+    def prepare_source_rsync(source_shell, dest_shell)
+      UI.spinner('Determining rsync location') do
+        location = determine_rsync(source_shell)
+        location = transfer_rsync(source_shell, dest_shell) if location.empty?
+
+        location
+      end
+    rescue Timeout::Error
+      retry_exit('Host is taking a long detecting/installing rsync.')
+      retry
+    end
+
+    # Public: Determine the target IP address to use for rsync.
+    #
+    # source_shell - SSH object logged in to the source host.
+    # dest_shell   - SSH object logged in to the destination host.
+    #
+    # Returns a String containing the new IP address to use.
+    def prepare_source_servicenet(source_shell, dest_shell)
+      dest_address = UI.spinner('Checking for ServiceNet') do
+        determine_target_address(source_shell, dest_shell)
+      end
+    rescue Timeout::Error
+      retry_exit('Host is taking a long detecting available networks.')
+      retry
+    end
+
+    # Public: Wrap performing an rsync migration.
+    #
+    # shell - SSH object logged in to the source host.
+    # rsync - Command to be run on the source host.
+    #
+    # Returns nothing.
+    def rsync_migrate(shell, rsync)
       UI.spinner('Performing rsync migration') do
         2.times do
-          # TODO: this dies in exceptional cases
-          source_shell.as_root(rsync, 7200)
-          source_shell.as_root("sed -i 's/\/var\/log//g' #{EXCLUSIONS}")
+          rsync_migrate_commands(shell, rsync)
         end
+        shell.logout!
       end
+    rescue Timeout::Error
+      retry if retry_prompt('Server sync is taking a very long time')
+      exit
+    end
+
+    # Public: Issue an rsync command, keeping track of how many times a timeout
+    # has occurred, raising an error past a threshhold of 3 timeouts.
+    #
+    # shell   - SSH object logged in to the source host.
+    # rsync   - Rsync command to be run on the source host.
+    # timeout - Number of times the timeout has been reached. (default: 0)
+    #
+    # Returns nothing.
+    def rsync_migrate_commands(shell, rsync, timeout = 0)
+      shell.as_root(rsync, 7200)
+      shell.as_root("sed -i 's/\/var\/log//g' #{EXCLUSIONS}")
+    rescue Timeout::Error
+      timeout += 1
+      retry if timeout < 3
+
+      raise
     end
 
     # Public: Create a temporary ssh key to be used for passwordless access to
@@ -396,11 +545,9 @@ module CloudFlock; module App
     # location of rsync on the system.
     #
     # shell      - SSH object logged in to the source host.
-    # exclusions - String containing the exclusions list for the source host.
     #
     # Returns a String containing path to rsync on the host if present.
-    def setup_source(shell, exclusions)
-      shell.as_root("cat <<EOF> #{EXCLUSIONS}\n#{exclusions}\nEOF")
+    def determine_rsync(shell)
       shell.as_root('which rsync 2>/dev/null')
     end
 
@@ -409,8 +556,6 @@ module CloudFlock; module App
     #
     # source_shell - SSH object logged in to the source host.
     # dest_shell   - SSH object logged in to the source host.
-    #
-    # Raises NoRsyncAvailable if rsync doesn't exist on the destination host.
     #
     # Returns a String.
     def transfer_rsync(source_shell, dest_shell)
@@ -436,33 +581,86 @@ module CloudFlock; module App
     #
     # Returns nothing.
     def setup_destination(shell, pubkey)
+      prepare_destination_filesystem(shell)
+      prepare_destination_rsync(shell)
+      prepare_destination_pubkey(shell, pubkey)
+    end
+
+    # Public: Mount the destination host's target device and make backups of
+    # authentication-related files (passwd, group, shadow).
+    #
+    # shell  - SSH object logged in to the destination host.
+    #
+    # TODO: Dynamic mountpoint/block device support
+    # Presently mount point and block device are hard-coded.  This will be
+    # changed in a future release.
+    #
+    # Returns nothing.
+    def prepare_destination_filesystem(shell)
       preserve_files = ['passwd', 'shadow', 'group']
       path = "#{MOUNT_POINT}/etc"
 
-      # TODO: Dynamic mountpoint/block device support
-      # Presently mount point and block device are hard-coded.  This will be
-      # changed in a future release.
-      shell.as_root("mkdir -p #{MOUNT_POINT}")
-      shell.as_root("mount -o acl /dev/xvdb1 #{MOUNT_POINT}")
+      UI.spinner('Preparing the destination filesystem') do
+        shell.as_root("mkdir -p #{MOUNT_POINT}")
+        shell.as_root("mount -o acl /dev/xvdb1 #{MOUNT_POINT}")
 
-      preserve_files.each do |file|
-        original = "#{path}/#{file}"
-        backup   = "#{original}.migration"
-        shell.as_root("[ -f #{backup} ] || /bin/cp -a #{original} #{backup}")
+        preserve_files.each do |file|
+          original = "#{path}/#{file}"
+          backup   = "#{original}.migration"
+          shell.as_root("[ -f #{backup} ] || /bin/cp -a #{original} #{backup}")
+        end
       end
+    rescue Timeout::Error
+      retry_exit('Host is slow to respond while preparing the destination.')
+      retry
+    end
 
-      # TODO: Better distro support
-      # Only Debian- and RedHat-based Unix hosts support automatic rsync
-      # installation at this time.  This will be fixed in a future release.
-      unless /rsync error/.match(shell.as_root('rsync'))
-        package_manager = shell.as_root('which {yum,apt-get} 2>/dev/null')
-        raise NoRsyncAvailable if package_manager.empty?
-        shell.as_root("#{package_manager} install rsync -y", 300)
+    # Public: Verify that rsync is installed on the destination host,
+    # installing needed.
+    #
+    # shell  - SSH object logged in to the destination host.
+    #
+    # TODO: Better distro support
+    # Only Debian- and RedHat-based Unix hosts support automatic rsync
+    # installation at this time.  This will be fixed in a future release.
+    #
+    # Raises NoRsyncAvailable if rsync doesn't exist on the destination host.
+    #
+    # Returns nothing.
+    def prepare_destination_rsync(shell)
+      UI.spinner('Verifying rsync is present on the destination host') do
+        unless /rsync error/.match(shell.as_root('rsync'))
+          package_manager = shell.as_root('which {yum,apt-get} 2>/dev/null')
+          raise NoRsyncAvailable if package_manager.empty?
+          shell.as_root("#{package_manager} install rsync -y", 300)
+        end
       end
+    rescue Timeout::Error
+      retry_exit('Host is slow to respond while preparing the destination.')
+      retry
+    end
 
-      ssh_key = "mkdir $HOME/.ssh; chmod 0700 $HOME/.ssh; printf " +
-                "'#{pubkey}\\n' >> $HOME/.ssh/authorized_keys"
-      shell.as_root(ssh_key)
+    # Public: Verify that rsync is installed on the destination host,
+    # installing needed.
+    #
+    # shell  - SSH object logged in to the destination host.
+    #
+    # TODO: Better distro support
+    # Only Debian- and RedHat-based Unix hosts support automatic rsync
+    # installation at this time.  This will be fixed in a future release.
+    #
+    # Raises NoRsyncAvailable if rsync doesn't exist on the destination host.
+    #
+    # Returns nothing.
+    def prepare_destination_pubkey(shell, pubkey)
+      UI.spinner('Installing source host public key') do
+        ssh_key = "mkdir $HOME/.ssh; chmod 0700 $HOME/.ssh; printf " +
+                  "'#{pubkey}\\n' >> $HOME/.ssh/authorized_keys"
+        shell.as_root(ssh_key)
+      end
+    rescue Timeout::Error
+      retry_exit('Host is slow to respond while preparing the destination.')
+      retry
     end
 
     # Public: Determine what address should be used when connecting from source
@@ -659,14 +857,27 @@ module CloudFlock; module App
       end
     end
 
+    # Public: Wrap retry_prompt, exiting the application if the prompt is
+    # declined.
+    #
+    # message - String containing a failure message.
+    # prompt  - Prompt to present to the user (default: 'Try again? (Y/N)').
+    #
+    # Returns false, or exits.
+    def retry_exit(message, prompt = 'Try again? (Y/N)')
+      error = UI.red { "#{message}  #{prompt}" }
+      exit unless UI.prompt_yn(error, default_answer: 'Y')
+    end
+
     # Public: Display a failure message to the user and prompt whether to
     # retry.
     #
     # message - String containing a failure message.
+    # prompt  - Prompt to present to the user (default: 'Try again? (Y/N)').
     #
     # Returns true or false indicating whether the user wishes to retry.
-    def retry_prompt(message)
-      error = UI.red { "#{message}  Try again? (Y/N)" }
+    def retry_prompt(message, prompt = 'Try again? (Y/N)')
+      error = UI.red { "#{message}  #{prompt}".strip }
       UI.prompt_yn(error, default_answer: 'Y')
     end
   end

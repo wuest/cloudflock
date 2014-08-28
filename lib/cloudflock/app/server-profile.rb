@@ -12,12 +12,11 @@ module CloudFlock; module App
     # Public: Connect to and profile a remote host, then display the gathered
     # information.
     def initialize
-      options = parse_options
+      options     = parse_options
+      source_host = options.dup
 
       source_host = define_source(options)
-      source_ssh = UI.spinner("Logging in to #{source_host[:hostname]}") do
-        SSH.new(source_host)
-      end
+      source_ssh  = connect_source(source_host)
 
       profile = UI.spinner("Checking source host") do
         CloudFlock::Task::ServerProfile.new(source_ssh)

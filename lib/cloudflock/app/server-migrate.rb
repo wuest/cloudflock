@@ -25,7 +25,6 @@ module CloudFlock; module App
       exclusions = build_exclusions(profile.cpe)
       migrate_server(source_host, dest_host, exclusions)
 
-      source_host.logout!
       cleanup_destination(dest_host, profile.cpe)
       configure_ips(dest_host, profile)
 
