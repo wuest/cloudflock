@@ -110,6 +110,10 @@ module CloudFlock; module Remote
     rescue EOFError
       start_session
       retry
+    rescue IO::EAGAINWaitReadable
+      sleep 10
+      start_session
+      retry
     end
 
     # Public: Call query on a list of commands, allowing optional timeout and

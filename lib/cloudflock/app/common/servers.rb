@@ -4,6 +4,7 @@ require 'cloudflock/app'
 require 'cloudflock/remote/ssh'
 require 'cloudflock/app/common/rackspace'
 require 'cloudflock/app/common/exclusions'
+require 'cloudflock/app/common/watchdogs'
 require 'cloudflock/app/common/cleanup'
 
 module CloudFlock; module App
@@ -141,6 +142,9 @@ module CloudFlock; module App
 
       options = {username: nil, password: nil}
       host = self.send(define_method, (host.merge(options)))
+      retry
+    rescue Errno::ECONNREFUSED
+      retry_exit("Connection refused from #{host[:hostname]}")
       retry
     end
 
@@ -396,6 +400,9 @@ module CloudFlock; module App
     rescue Net::SSH::Disconnect
       retry_exit('Unable to establish a connection.')
       retry
+    rescue Errno::ECONNREFUSED
+      retry_exit("Connection refused from #{host[:hostname]}")
+      retry
     end
 
     # Public: Get details for a Fog::Compute instance.
@@ -425,9 +432,11 @@ module CloudFlock; module App
       rsync = prepare_source_rsync(source_shell, dest_shell)
       dest_address = prepare_source_servicenet(source_shell, dest_shell)
 
+      watchdogs = create_watchdogs(source_shell, dest_shell)
       rsync = "#{rsync} -azP -e 'ssh #{SSH_ARGUMENTS} -i #{PRIVATE_KEY}' " +
               "--exclude-from='#{EXCLUSIONS}' / #{dest_address}:#{MOUNT_POINT}"
       rsync_migrate(source_shell, rsync)
+      stop_watchdogs(watchdogs)
     end
 
     # Public: Generate a new ssh keypair to be used for the migration.
@@ -660,6 +669,81 @@ module CloudFlock; module App
       end
     rescue Timeout::Error
       retry_exit('Host is slow to respond while preparing the destination.')
+      retry
+    end
+
+    # Public: For each watchdog in a collection, stop the watchdog.
+    #
+    # watchdogs - Hash containing name => Watchdog mappings.
+    #
+    # Returns nothing.
+    def stop_watchdogs(watchdogs)
+      watchdogs.each { |watchdog| stop_watchdog(watchdog) }
+    end
+
+    # Public: Stop a given watchdog, reporting on the status.
+    #
+    # watchdog - Watchdog object to be stopped.
+    #
+    # Returns nothing.
+    def stop_watchdog(watchdog)
+      UI.spinner("Stopping watchdog: #{watchdog.name}") { watchdog.stop }
+    rescue Timeout::Error
+    end
+
+    # Public: Start all watchdogs for a migration.
+    #
+    # source_shell - SSH object logged in to the source host.
+    # dest_shell   - SSH object logged in to the destination host.
+    #
+    # Returns a Hash containing name => Watchdog mappings.  Watchdogs will have
+    # no alarms set.
+    def create_watchdogs(source_shell, dest_shell)
+      source_watchdogs(source_shell) + dest_watchdogs(dest_shell)
+    end
+
+    # Public: Start all watchdogs to monitor a source host.
+    #
+    # source - SSH object logged in to the source host.
+    #
+    # Returns a Hash containing name => Watchdog mappings.  Watchdogs will have
+    # no alarms set.
+    def source_watchdogs(shell)
+      [:system_load,:utilized_memory].map do |e|
+        start_watchdog(:source, e, shell)
+      end
+    end
+
+    # Public: Start all watchdogs to monitor a destination host.
+    #
+    # source - SSH object logged in to the destination host.
+    #
+    # Returns a Hash containing name => Watchdog mappings.  Watchdogs will have
+    # no alarms set.
+    def dest_watchdogs(shell)
+      [:system_load,:utilized_memory, :used_space].map do |e|
+        start_watchdog(:destination, e, shell)
+      end
+    end
+
+    # Public: Start a watchdog on a given host.
+    #
+    # location - Symbol or String containing the name of the location where the
+    #            watshdog should be run.
+    # name     - Symbol or String describing the watchdog in question.
+    # source   - SSH object logged in to the host which the watchdog should
+    #            monitor.
+    #
+    # Returns a Hash containing name => Watchdog mappings.  Watchdogs will have
+    # no alarms set.
+    def start_watchdog(location, name, shell)
+      display = "#{location} #{name}".capitalize
+      UI.spinner("Starting watchdog: #{display}") do
+        Watchdogs.send(name, shell, display)
+      end
+    rescue Timeout::Error
+      failed = name.to_s.gsub(/_/, ' ').capitalize
+      retry_exit("Timed out starting the #{failed} watchdog.")
       retry
     end
 
