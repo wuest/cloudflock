@@ -95,9 +95,10 @@ module CloudFlock
       opts.separator ''
       opts.separator 'Global Options:'
 
-      opts.on('-c', '--config FILE', 'Specify configuration file') do |file|
-        options[:config_file] = File.expand_path(file)
-      end
+# TODO: Add config file support.
+#      opts.on('-c', '--config FILE', 'Specify configuration file') do |file|
+#        options[:config_file] = File.expand_path(file)
+#      end
 
       opts.on_tail('--version', 'Show Version Information') do
         puts "CloudFlock v#{CloudFlock::VERSION}"

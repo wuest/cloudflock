@@ -42,18 +42,17 @@ module CloudFlock; module Remote
     #
     # args - Hash containing arguments relating to the SSH session. (default
     #        defined in DEFAULT_ARGS):
-    #        :hostname       - String containing the address of the remote
-    #                          host.
-    #        :username       - String containing the remote user with which to
-    #                          log in.  (default: '')
-    #        :password       - String containing the password with which to log
-    #                          in.  (default: '')
-    #        :port           - Fixnum specifying the port to which to connect.
-    #                          (default: 22)
-    #        :ssh_key        - String containing the path to an ssh private
-    #                          key.  (default: '')
-    #        :key_passphrase - The passphrase for the ssh key if applicable.
-    #                          (default: '')
+    #        :hostname   - String containing the address of the remote host.
+    #        :username   - String containing the remote user with which to log
+    #                      in.  (default: '')
+    #        :password   - String containing the password with which to log in.
+    #                      (default: '')
+    #        :port       - Fixnum specifying the port to which to connect.
+    #                      (default: 22)
+    #        :ssh_key    - String containing the path to an ssh private key.
+    #                      (default: '')
+    #        :passphrase - The passphrase for the ssh key if applicable.
+    #                      (default: '')
     #
     # Raises InvalidHostname if host lookup fails.
     # Raises LoginFailed if logging into the host fails.
@@ -192,18 +191,17 @@ module CloudFlock; module Remote
     # Internal: Sanitize arguments to be used
     #
     # args - Hash containing arguments relating to the SSH session:
-    #        :host           - String containing the address of the remote
-    #                          host.
-    #        :username       - String containing the remote user with which to
-    #                          log in.  (default: '')
-    #        :password       - String containing the password with which to log
-    #                          in.  (default: '')
-    #        :port           - Fixnum specifying the port to which to connect.
-    #                          (default: 22)
-    #        :ssh_key        - String containing the path to an ssh private
-    #                          key.  (default: '')
-    #        :key_passphrase - The passphrase for the ssh key if applicable.
-    #                          (default: '')
+    #        :host       - String containing the address of the remote host.
+    #        :username   - String containing the remote user with which to log
+    #                      in.  (default: '')
+    #        :password   - String containing the password with which to log in.
+    #                      (default: '')
+    #        :port       - Fixnum specifying the port to which to connect.
+    #                      (default: 22)
+    #        :ssh_key    - String containing the path to an ssh private key.
+    #                      (default: '')
+    #        :passphrase - The passphrase for the ssh key if applicable.
+    #                      (default: '')
     #
     # Returns a Hash containing sanitized arguments suitable for passing to
     # Net::SSH.  Not that #filter_ssh_arguments should be called to guarantee
@@ -237,9 +235,9 @@ module CloudFlock; module Remote
     # args - Hash containing arguments to filter.
     #
     # Returns a Hash with only the keys :port, :password, :key_data and
-    # :key_passphrase defined.
+    # :passphrase defined.
     def filter_ssh_options(args)
-      valid_arguments = [:port, :password, :key_data, :key_passphrase]
+      valid_arguments = [:port, :password, :key_data, :passphrase]
       args.select { |opt| valid_arguments.include? opt }.merge(NET_SSH_OPTIONS)
     end
 
