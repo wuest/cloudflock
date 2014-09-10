@@ -396,6 +396,13 @@ module CloudFlock; module App
     rescue Net::SSH::Disconnect
       retry_exit('Unable to establish a connection.')
       retry
+    rescue ArgumentError
+      retry_exit('Incorrect passphrase provided for ssh key.')
+
+      host.delete(:passphrase)
+      check_option_pw(host, :passphrase, "Key passphrase", default_answer: '',
+                      allow_empty: true)
+      retry
     end
 
     # Public: Get details for a Fog::Compute instance.

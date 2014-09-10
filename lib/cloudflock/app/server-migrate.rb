@@ -262,6 +262,11 @@ module CloudFlock; module App
                   'SSH identity to use for the source host') do |key|
             options[:ssh_key] = key
           end
+
+          opts.on('--src-identity-password PASSWORD',
+                  "Password to unlock the source host's SSH key") do |pass|
+            options[:passphrase] = key
+          end
         end
 
         opts.separator ''
@@ -304,6 +309,11 @@ module CloudFlock; module App
           opts.on('-I', '--dest-identity IDENTITY',
                   'SSH identity to use for the destination host') do |key|
             options[:dest_ssh_key] = key
+          end
+
+          opts.on('--dest-identity-password PASSWORD',
+                  "Password to unlock the destination host's SSH key") do |pass|
+            options[:dest_passphrase] = key
           end
         end
 
