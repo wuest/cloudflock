@@ -13,10 +13,27 @@ module CloudFlock; module App
     # information.
     def initialize
       options     = parse_options
-      source_host = options.dup
+      servers     = options[:servers]
+      save_option = true unless servers
+      servers   ||= [options]
 
-      source_host = define_source(options)
-      save_config(source_host) if save_config?
+      results = servers.map { |server| profile_host(server.dup, save_option) }
+      printable = results.map do |hash|
+        name = hash.keys.first
+        profile = hash[name]
+        UI.bold { UI.green { "#{name}\n" } } +
+        generate_report(profile) +
+        (options[:verbose] ? profile.process_list.to_s : "")
+      end
+
+      puts printable.join("\n\n")
+    end
+
+    private
+
+    def profile_host(source_host, save_option)
+      source_host = define_source(source_host)
+      save_config(source_host) if save_option && save_config?
 
       source_ssh  = connect_source(source_host)
 
@@ -24,11 +41,8 @@ module CloudFlock; module App
         CloudFlock::Task::ServerProfile.new(source_ssh)
       end
 
-      puts generate_report(profile)
-      puts profile.process_list if options[:verbose]
+      {source_host[:hostname] => profile}
     end
-
-    private
 
     # Internal: Generate a "title" String (bold, 15 characters wide).
     #
@@ -98,11 +112,11 @@ module CloudFlock; module App
         clobber = UI.prompt_yn('Overwrite? (Y/N)', default_answer: 'Y')
         old_config = YAML.load_file(config_location) unless clobber
       end
-      old_config ||= []
-
+      old_config ||= {}
 
       File.open(config_location, 'w') do |file|
-        file.write(YAML.dump(old_config + [source_host]))
+        new_servers = old_config[:servers].to_a + [source_host]
+        file.write(YAML.dump(old_config.merge({servers: new_servers})))
       end
     end
 
