@@ -80,6 +80,16 @@ module CloudFlock
       options[name] = UI.prompt_yn(prompt, prompt_options)
     end
 
+    def load_config_if_present(options)
+      if File.file?(options[:config_file].to_s)
+        YAML.load_file(options[:config_file]).merge(options)
+      else
+        options
+      end
+    rescue Psych::SyntaxError, NoMethodError
+      options
+    end
+
     # Public: Parse options and expose global options which are expected to be
     # useful in any CLI application.
     #
@@ -96,10 +106,9 @@ module CloudFlock
       opts.separator ''
       opts.separator 'Global Options:'
 
-# TODO: Add config file support.
-#      opts.on('-c', '--config FILE', 'Specify configuration file') do |file|
-#        options[:config_file] = File.expand_path(file)
-#      end
+      opts.on('-c', '--config FILE', 'Specify configuration file') do |file|
+        options[:config_file] = File.expand_path(file)
+      end
 
       opts.on_tail('--version', 'Show Version Information') do
         puts "CloudFlock v#{CloudFlock::VERSION}"
@@ -113,7 +122,7 @@ module CloudFlock
 
       opts.parse!(ARGV)
 
-      options
+      load_config_if_present(options)
     rescue OptionParser::MissingArgument, OptionParser::InvalidOption => error
       puts error.message.capitalize
       puts
