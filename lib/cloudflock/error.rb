@@ -2,6 +2,7 @@ module CloudFlock
   module App
     module Common
       class NoRsyncAvailable < StandardError; end
+      class WatchdogAlert    < StandardError; end
     end
   end
 

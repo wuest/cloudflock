@@ -12,13 +12,13 @@ module CloudFlock; module Remote; class SSH
   #   # Create a Watchdog to monitor system load, the state will be tracked as
   #   a float and updated every 15 seconds (roughly 3 refreshes by default.)
   #   # The state of the Watchdog can be accessed via the Watchdog#state method.
-  #   system_load = Watchdog.new(ssh, 'uptime', 15) do |load|
-  #     load.gsub(/^.*(\d+\.\d+).*$/, '\\1').to_f
+  #   system_load = Watchdog.new(ssh, 'uptime', 15) do |wait|
+  #     wait.gsub(/^.*(\d+\.\d+).*$/, '\\1').to_f
   #   end
   #
   #   # Alerts can be created, so that action can be taken automatically.
-  #   system_load.create_alarm('high_load') { |load| load > 10 }
-  #   system_load.on_alarm('high_load') { |load| puts "Load is #{load}!"; exit }
+  #   system_load.create_alarm('high_load') { |wait| wait > 10 }
+  #   system_load.on_alarm('high_load') { |wait| puts "Load is #{wait}!"; exit }
   class Watchdog
     attr_reader :state
     attr_reader :name
@@ -26,7 +26,7 @@ module CloudFlock; module Remote; class SSH
     # Public: Create a new Watchdog to keep track of some aspect of a given
     # host's state.
     #
-    # name     - String describing the 
+    # name     - String containing the watchdog's name.
     # ssh      - SSH session which the Watchdog should monitor.
     # command  - String to run periodically on the target SSH session to
     #            determine the host's state.
@@ -86,7 +86,14 @@ module CloudFlock; module Remote; class SSH
     # Returns false if the alarm is not defined, or the result of the alarm
     # predicate otherwise.
     def alarm_active?(name)
-      triggered = alarms[name].nil? ? false : alarms[name] 
+      triggered = alarms[name].nil? ? false : alarms[name]
+    end
+
+    # Public: Return the state of all active alarms.
+    #
+    # Returns an Array of active alarms.
+    def triggered_alarms
+      alarms.select { |k,v| v[state] }.map(&:first)
     end
 
     private
@@ -105,7 +112,7 @@ module CloudFlock; module Remote; class SSH
           result = ssh.query(command)
           state  = transform.nil? ? result : transform[result]
 
-          trigger_alarms
+          respond_to_alarms
           sleep interval
         end
       end
@@ -115,9 +122,8 @@ module CloudFlock; module Remote; class SSH
     # if the alarm is considered fired.
     #
     # Returns nothing.
-    def trigger_alarms
-      triggered = alarms.select { |k,v| v[state] }.map { |n| n[0] }
-      triggered.each { |key| actions[key].call if actions[key] }
+    def respond_to_alarms
+      triggered_alarms.each { |key| actions[key].call if actions[key] }
     end
   end
 end; end; end

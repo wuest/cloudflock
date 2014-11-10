@@ -435,7 +435,7 @@ module CloudFlock; module App
       watchdogs = create_watchdogs(source_shell, dest_shell)
       rsync = "#{rsync} -azP -e 'ssh #{SSH_ARGUMENTS} -i #{PRIVATE_KEY}' " +
               "--exclude-from='#{EXCLUSIONS}' / #{dest_address}:#{MOUNT_POINT}"
-      rsync_migrate(source_shell, rsync)
+      rsync_migrate(watchdogs, source_shell, rsync)
       stop_watchdogs(watchdogs)
     end
 
@@ -501,22 +501,44 @@ module CloudFlock; module App
       retry
     end
 
+    def rsync_migrate(watchdogs, shell, rsync)
+      UI.spinner('Waiting for all hosts to appear to be in a healthy state') do
+        ensure_no_watchdog_alerts(watchdogs)
+      end
+      UI.spinner('Performing rsync migration') do
+        worker = Thread.new do
+          rsync_migrate_thread(shell, rsync)
+          Thread.current[:complete] = true
+        end
+        set_watchdog_alerts(watchdogs, worker)
+        worker.join
+        raise WatchdogAlert unless worker[:complete]
+      end
+    rescue WatchdogAlert
+      retry
+    end
+
     # Public: Wrap performing an rsync migration.
     #
     # shell - SSH object logged in to the source host.
     # rsync - Command to be run on the source host.
     #
     # Returns nothing.
-    def rsync_migrate(shell, rsync)
-      UI.spinner('Performing rsync migration') do
-        2.times do
-          rsync_migrate_commands(shell, rsync)
-        end
-        shell.logout!
+    def rsync_migrate_thread(shell, rsync)
+      2.times do
+        rsync_migrate_commands(shell, rsync)
       end
+      shell.logout!
     rescue Timeout::Error
       retry if retry_prompt('Server sync is taking a very long time')
       exit
+    end
+
+    def ensure_no_watchdog_alerts(watchdogs)
+      raise WatchdogAlert if watchdogs.map(&:triggered_alarms).flatten.any?
+    rescue WatchdogAlert
+      sleep 30
+      retry
     end
 
     # Public: Issue an rsync command, keeping track of how many times a timeout
@@ -544,9 +566,10 @@ module CloudFlock; module App
     #
     # Returns a String containing the host's new ssh public key.
     def generate_keypair(shell)
-      shell.as_root("mkdir #{DATA_DIR}")
-      shell.as_root("ssh-keygen -b 4096 -q -t rsa -f #{PRIVATE_KEY} -P ''")
-      shell.as_root("cat #{PUBLIC_KEY}")
+      keygen_command = "ssh-keygen -b 4096 -q -t rsa -f #{PRIVATE_KEY} -P ''"
+      shell.as_root(p "mkdir #{DATA_DIR}")
+      shell.as_root(p keygen_command, 3600)
+      shell.as_root(p "cat #{PUBLIC_KEY}")
     end
 
     # Public: Prepare the source host for migration by populating the
@@ -745,6 +768,18 @@ module CloudFlock; module App
       failed = name.to_s.gsub(/_/, ' ').capitalize
       retry_exit("Timed out starting the #{failed} watchdog.")
       retry
+    end
+
+    # Public: Set watchdogs up with default alarms.
+    #
+    # watchdogs - Array containing all default watchdogs.
+    # worker    - Thread containing the migration worker.
+    #
+    # Returns nothing.
+    def set_watchdog_alerts(watchdogs, worker)
+      watchdogs.each do |watchdog|
+        Watchdogs.send("set_alarm_#{watchdog.name}", watchdog, worker)
+      end
     end
 
     # Public: Determine what address should be used when connecting from source
