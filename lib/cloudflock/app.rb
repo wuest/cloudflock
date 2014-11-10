@@ -1,6 +1,7 @@
 require 'optparse'
 require 'cloudflock'
 require 'console-glitter'
+require 'yaml'
 
 module CloudFlock
   # Public: The App module provides any functionality that is expected to be
