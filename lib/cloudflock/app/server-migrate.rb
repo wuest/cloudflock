@@ -18,7 +18,7 @@ module CloudFlock; module App
       servers   = options[:servers]
       servers ||= [options]
 
-      sources  = servers.each(&method(:define_source))
+      sources  = servers.map(&method(:define_source))
       profiles = sources.map do |host|
         source_host = ssh_connect(host)
         fetch_profile(source_host)
