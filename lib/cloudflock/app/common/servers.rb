@@ -4,6 +4,7 @@ require 'cloudflock/app'
 require 'cloudflock/remote/ssh'
 require 'cloudflock/app/common/rackspace'
 require 'cloudflock/app/common/exclusions'
+require 'cloudflock/app/common/watchdogs'
 require 'cloudflock/app/common/cleanup'
 
 module CloudFlock; module App
@@ -141,6 +142,9 @@ module CloudFlock; module App
 
       options = {username: nil, password: nil}
       host = self.send(define_method, (host.merge(options)))
+      retry
+    rescue Errno::ECONNREFUSED
+      retry_exit("Connection refused from #{host[:hostname]}")
       retry
     end
 
@@ -396,13 +400,15 @@ module CloudFlock; module App
     rescue Net::SSH::Disconnect
       retry_exit('Unable to establish a connection.')
       retry
+    rescue Errno::ECONNREFUSED
+      retry_exit("Connection refused from #{host[:hostname]}")
+      retry
     rescue ArgumentError
       retry_exit('Incorrect passphrase provided for ssh key.')
 
       host.delete(:passphrase)
       check_option_pw(host, :passphrase, "Key passphrase", default_answer: '',
                       allow_empty: true)
-      retry
     end
 
     # Public: Get details for a Fog::Compute instance.
@@ -432,9 +438,11 @@ module CloudFlock; module App
       rsync = prepare_source_rsync(source_shell, dest_shell)
       dest_address = prepare_source_servicenet(source_shell, dest_shell)
 
+      watchdogs = create_watchdogs(source_shell, dest_shell)
       rsync = "#{rsync} -azP -e 'ssh #{SSH_ARGUMENTS} -i #{PRIVATE_KEY}' " +
               "--exclude-from='#{EXCLUSIONS}' / #{dest_address}:#{MOUNT_POINT}"
-      rsync_migrate(source_shell, rsync)
+      rsync_migrate(watchdogs, source_shell, rsync)
+      stop_watchdogs(watchdogs)
     end
 
     # Public: Generate a new ssh keypair to be used for the migration.
@@ -499,22 +507,44 @@ module CloudFlock; module App
       retry
     end
 
+    def rsync_migrate(watchdogs, shell, rsync)
+      UI.spinner('Waiting for all hosts to appear to be in a healthy state') do
+        ensure_no_watchdog_alerts(watchdogs)
+      end
+      UI.spinner('Performing rsync migration') do
+        worker = Thread.new do
+          rsync_migrate_thread(shell, rsync)
+          Thread.current[:complete] = true
+        end
+        set_watchdog_alerts(watchdogs, worker)
+        worker.join
+        raise WatchdogAlert unless worker[:complete]
+      end
+    rescue WatchdogAlert
+      retry
+    end
+
     # Public: Wrap performing an rsync migration.
     #
     # shell - SSH object logged in to the source host.
     # rsync - Command to be run on the source host.
     #
     # Returns nothing.
-    def rsync_migrate(shell, rsync)
-      UI.spinner('Performing rsync migration') do
-        2.times do
-          rsync_migrate_commands(shell, rsync)
-        end
-        shell.logout!
+    def rsync_migrate_thread(shell, rsync)
+      2.times do
+        rsync_migrate_commands(shell, rsync)
       end
+      shell.logout!
     rescue Timeout::Error
       retry if retry_prompt('Server sync is taking a very long time')
       exit
+    end
+
+    def ensure_no_watchdog_alerts(watchdogs)
+      raise WatchdogAlert if watchdogs.map(&:triggered_alarms).flatten.any?
+    rescue WatchdogAlert
+      sleep 30
+      retry
     end
 
     # Public: Issue an rsync command, keeping track of how many times a timeout
@@ -542,8 +572,9 @@ module CloudFlock; module App
     #
     # Returns a String containing the host's new ssh public key.
     def generate_keypair(shell)
+      keygen_command = "ssh-keygen -b 4096 -q -t rsa -f #{PRIVATE_KEY} -P ''"
       shell.as_root("mkdir #{DATA_DIR}")
-      shell.as_root("ssh-keygen -b 4096 -q -t rsa -f #{PRIVATE_KEY} -P ''")
+      shell.as_root(keygen_command, 3600)
       shell.as_root("cat #{PUBLIC_KEY}")
     end
 
@@ -668,6 +699,94 @@ module CloudFlock; module App
     rescue Timeout::Error
       retry_exit('Host is slow to respond while preparing the destination.')
       retry
+    end
+
+    # Public: For each watchdog in a collection, stop the watchdog.
+    #
+    # watchdogs - Hash containing name => Watchdog mappings.
+    #
+    # Returns nothing.
+    def stop_watchdogs(watchdogs)
+      watchdogs.each { |watchdog| stop_watchdog(watchdog) }
+    end
+
+    # Public: Stop a given watchdog, reporting on the status.
+    #
+    # watchdog - Watchdog object to be stopped.
+    #
+    # Returns nothing.
+    def stop_watchdog(watchdog)
+      UI.spinner("Stopping watchdog: #{watchdog.name}") { watchdog.stop }
+    rescue Timeout::Error
+    end
+
+    # Public: Start all watchdogs for a migration.
+    #
+    # source_shell - SSH object logged in to the source host.
+    # dest_shell   - SSH object logged in to the destination host.
+    #
+    # Returns a Hash containing name => Watchdog mappings.  Watchdogs will have
+    # no alarms set.
+    def create_watchdogs(source_shell, dest_shell)
+      source_watchdogs(source_shell) + dest_watchdogs(dest_shell)
+    end
+
+    # Public: Start all watchdogs to monitor a source host.
+    #
+    # source - SSH object logged in to the source host.
+    #
+    # Returns a Hash containing name => Watchdog mappings.  Watchdogs will have
+    # no alarms set.
+    def source_watchdogs(shell)
+      [:system_load,:utilized_memory].map do |e|
+        start_watchdog(:source, e, shell)
+      end
+    end
+
+    # Public: Start all watchdogs to monitor a destination host.
+    #
+    # source - SSH object logged in to the destination host.
+    #
+    # Returns a Hash containing name => Watchdog mappings.  Watchdogs will have
+    # no alarms set.
+    def dest_watchdogs(shell)
+      [:system_load,:utilized_memory, :used_space].map do |e|
+        start_watchdog(:destination, e, shell)
+      end
+    end
+
+    # Public: Start a watchdog on a given host.
+    #
+    # location - Symbol or String containing the name of the location where the
+    #            watshdog should be run.
+    # name     - Symbol or String describing the watchdog in question.
+    # source   - SSH object logged in to the host which the watchdog should
+    #            monitor.
+    #
+    # Returns a Hash containing name => Watchdog mappings.  Watchdogs will have
+    # no alarms set.
+    def start_watchdog(location, name, shell)
+      display = "#{location} #{name}".capitalize
+      UI.spinner("Starting watchdog: #{display}") do
+        Watchdogs.send(name, shell, display)
+      end
+    rescue Timeout::Error
+      failed = name.to_s.gsub(/_/, ' ').capitalize
+      retry_exit("Timed out starting the #{failed} watchdog.")
+      retry
+    end
+
+    # Public: Set watchdogs up with default alarms.
+    #
+    # watchdogs - Array containing all default watchdogs.
+    # worker    - Thread containing the migration worker.
+    #
+    # Returns nothing.
+    def set_watchdog_alerts(watchdogs, worker)
+      watchdogs.each do |watchdog|
+        method = watchdog.name.split(/ /).last
+        Watchdogs.send("set_alarm_#{method}", watchdog, worker)
+      end
     end
 
     # Public: Determine what address should be used when connecting from source

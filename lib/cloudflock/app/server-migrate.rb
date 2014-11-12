@@ -11,30 +11,82 @@ module CloudFlock; module App
     include CloudFlock::App::Common
     include CloudFlock::Remote
 
-    # Public: Perform the steps necessary to migrate a Unix host to a standing
-    # host or to a newly provisioned Rackspace Cloud server.
+    # Public: Obtain information needed to migrate one or more Unix hosts, and
+    # perform the migrations.
     def initialize
-      options = parse_options
+      options   = parse_options
+      servers   = options[:servers]
+      servers ||= [options]
 
-      source_host = source_connect(options)
-      profile = fetch_profile(source_host)
+      sources  = servers.map(&method(:define_source))
+      profiles = sources.map do |host|
+        source_host = ssh_connect(host)
+        fetch_profile(source_host)
+      end
 
-      puts generate_recommendation(profile)
+      api,managed = get_api_and_service_level unless options[:resume]
 
-      dest_host = destination_connect(options, profile)
-      exclusions = build_exclusions(profile.cpe)
-      migrate_server(source_host, dest_host, exclusions)
+      destinations = profiles.zip(sources).map do |profile, host|
+        destination_info(host, profile, options[:resume], managed, api)
+      end
 
-      cleanup_destination(dest_host, profile.cpe)
-      configure_ips(dest_host, profile)
+      exclusions = profiles.
+        zip(destinations).
+        zip(sources).
+        map(&:flatten).map do |profile, dest, host|
+        puts UI.green { "#{host[:hostname]} -> #{dest[:hostname]}" }
+        build_exclusions(profile.cpe)
+      end
 
-      puts UI.bold { UI.blue { "Migration complete to #{dest_host.hostname}"} }
-    rescue
-      puts UI.red { 'An unhandled error was encountered.  Details follow:' }
-      raise
+      results = sources.
+        zip(destinations).
+        zip(exclusions).
+        zip(profiles).
+        map(&:flatten).
+        map { |params| do_migration(*params) }
+
+      puts results.join("\n")
     end
 
     private
+
+    # Internal: Perform the steps necessary to migrate one Unix host to another.
+    #
+    # source_host - Information necessary to log in to the source host.
+    # dest_host   - Information necessary to log in to the destination host.
+    # exclusions  - String containing paths to exclude from the migration.
+    # profile     - ServerProfile for the source host.
+    #
+    # Returns a String containing information regarding the success or failure
+    # of the migration.
+    def do_migration(source_host, dest_host, exclusions, profile)
+      source_ssh = ssh_connect(source_host)
+      dest_ssh = ssh_connect(dest_host)
+
+      migrate_server(source_ssh, dest_ssh, exclusions)
+      cleanup_destination(dest_ssh, profile.cpe)
+      configure_ips(dest_ssh, profile)
+
+      UI.bold { UI.blue { "Migration complete to #{dest_host[:hostname]}"} }
+    rescue => e
+      UI.red { 'An unhandled error was encountered.  Details follow:' } +
+      UI.red { e.display + e.backtrace }
+    end
+
+    # Internal: Obtain information relevant to a Rackspace account.
+    #
+    # Returns an Array containing a Fog::Itendity object and a boolean
+    # determining whether the account is managed.
+    def get_api_and_service_level
+      api = define_rackspace_api
+      Fog::Identity.new(api)
+      managed = UI.prompt_yn('Managed Account? (Y/N)', default_answer: 'N')
+
+      [api, managed]
+    rescue Excon::Errors::Unauthorized
+      retry if UI.prompt_yn('Login failed.  Retry? (Y/N)', default_answer: 'Y')
+      exit
+    end
 
     # Internal: Profile a server in order to make accurate recommendations.
     #
@@ -47,15 +99,28 @@ module CloudFlock; module App
       end
     end
 
-    # Internal: Collect information needed to connect to the source host for a
-    # migration.  Connect to the target host.
+    # Internal: Display a recommendation to the user, then obtain information
+    # needed to log into a target host, creating a new cloud server if
+    # necessary.
     #
-    # options - Hash containing information to connect to an existing host.
+    # host    - Hash containing information regarding the destination host,
+    #           if given.
+    # profile - ServerProfile for the source host.
+    # resume  - Boolean value denoting whether a migration will be resumed.
+    # managed - Boolean value denoting whether the account in question is
+    #           managed.
+    # api     - Fog::Identity object used to make API calls.
     #
-    # Returns an SSH object connected to the source host.
-    def source_connect(options)
-      source_host = define_source(options)
-      ssh_connect(source_host)
+    # Returns a Hash containing information needed to log in to the destination
+    # host.
+    def destination_info(host, profile, resume, managed, api)
+      puts generate_recommendation(profile)
+
+      if resume
+        define_destination(host)
+      else
+        create_cloud_instance(api, profile, managed)
+      end
     end
 
     # Internal: Collect information needed to either connect to an existing
@@ -67,18 +132,7 @@ module CloudFlock; module App
     #
     # Returns an SSH object connected to the target host.
     def destination_connect(options, profile)
-      if options[:resume]
-        dest_host = define_destination(options)
-      else
-        api = define_rackspace_api
-        managed = UI.prompt_yn('Managed account? (Y/N)', default_answer: 'N')
-        dest_host = create_cloud_instance(api, profile, managed)
-      end
-
       ssh_connect(dest_host)
-    rescue Excon::Errors::Unauthorized
-      retry if UI.prompt_yn('Login failed.  Retry? (Y/N)', default_answer: 'Y')
-      exit
     end
 
     # Internal: Provision a new instance on the Rackspace cloud and return
