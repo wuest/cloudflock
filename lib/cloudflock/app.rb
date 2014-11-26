@@ -80,6 +80,14 @@ module CloudFlock
       options[name] = UI.prompt_yn(prompt, prompt_options)
     end
 
+    # Public: Load a configuration file and return the result of the contents
+    # merged against the parsed options (which can override directives in the
+    # configuration) if a configuration file was specified.
+    #
+    # options - Hash containing options which may specify a configuration file
+    #           under the :config_file key.
+    #
+    # Returns a Hash.
     def load_config_if_present(options)
       if File.file?(options[:config_file].to_s)
         YAML.load_file(options[:config_file]).merge(options)
