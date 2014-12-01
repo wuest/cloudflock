@@ -1,0 +1,7 @@
+#!/usr/bin/env ruby
+
+require 'cloudflock/app/script-runner'
+
+$0 = 'cloudflock-script'
+
+CloudFlock::App::ScriptRunner.new
