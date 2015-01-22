@@ -14,6 +14,7 @@ module CloudFlock; module App
     def initialize
       options   = parse_options
       servers   = options[:servers]
+      @logger   = options[:logger]
       servers ||= [options]
       script = options[:script] || locate_script
 
@@ -30,6 +31,8 @@ module CloudFlock; module App
     end
 
     private
+
+    attr_reader :logger
 
     # Internal: Run a script on a given host.
     #
@@ -51,7 +54,7 @@ module CloudFlock; module App
     # Returns a ScriptRunner.
     def locate_script
       location = UI.prompt_filesystem('Location of script to run')
-      CloudFlock::Task::ScriptRunner.new(location)
+      CloudFlock::Task::ScriptRunner.new(location, logger)
     end
 
     # Internal: Set up an OptionParser object to recognize options specific to
