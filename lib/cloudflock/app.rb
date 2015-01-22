@@ -1,3 +1,4 @@
+require 'logger'
 require 'optparse'
 require 'cloudflock'
 require 'console-glitter'
@@ -118,6 +119,11 @@ module CloudFlock
         options[:config_file] = File.expand_path(file)
       end
 
+      opts.on('-l', '--log FILE', 'Specify log file') do |file|
+        options[:log_file] = File.expand_path(file)
+        options[:logger]   = Logger.new(options[:log_file])
+      end
+
       opts.on_tail('--version', 'Show Version Information') do
         puts "CloudFlock v#{CloudFlock::VERSION}"
         exit
@@ -129,7 +135,6 @@ module CloudFlock
       end
 
       opts.parse!(ARGV)
-
       load_config_if_present(options)
     rescue OptionParser::MissingArgument, OptionParser::InvalidOption => error
       puts error.message.capitalize
