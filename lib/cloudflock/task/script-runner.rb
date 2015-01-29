@@ -1,12 +1,16 @@
 require 'cloudflock/remote/ssh'
+require 'cloudflock/log'
 require 'cpe'
 
 module CloudFlock; module Task
   class ScriptRunner
+    include CloudFlock::Log
     # Public: Initialize the Profile object.
     #
-    # shell - String containing YAML representing the script to be run on each
-    #         host.
+    # shell  - String containing YAML representing the script to be run on each
+    #          host.
+    # logger - Object which represents a logging facility, if any.
+    #          (default: nil)
     def initialize(script, logger = nil)
       @logger = logger
       @script = File.read(File.expand_path(script))
@@ -25,6 +29,7 @@ module CloudFlock; module Task
     end
 
     private
+    attr_reader :script, :logger
 
     # Internal: Perform a command as the root user on a shell session,
     # attempting to log the information.
@@ -42,23 +47,5 @@ module CloudFlock; module Task
       output = shell.as_root(command, timeout)
       log(output, '< ')
     end
-
-    # Internal: If a logger exists, commit a string to the log.  Otherwise, do
-    # nothing.
-    #
-    # string - String to be logged.
-    # prefix - String to prefix the logged text.  (default: '')
-    # level  - Symbol specifying the log level to be reported under.
-    #          (default: :debug)
-    #
-    # Returns a String containing any output of the command run.
-    def log(string, prefix = '', level = :debug)
-      return string unless logger
-
-      logger.public_send(level, prefix + string.inspect.gsub(/^"|"$/, ''))
-      string
-    end
-
-    attr_reader :script, :logger
   end
 end; end
