@@ -14,10 +14,14 @@ module CloudFlock; module App
     def initialize
       options     = parse_options
       servers     = options[:servers]
+      logger      = options[:logger]
       save_option = true unless servers
       servers   ||= [options]
 
-      results = servers.map { |server| profile_host(server.dup, save_option) }
+      results = servers.map do |server|
+        profile_host(server.dup, save_option, logger)
+      end
+
       printable = results.map do |hash|
         name = hash.keys.first
         profile = hash[name]
@@ -31,14 +35,14 @@ module CloudFlock; module App
 
     private
 
-    def profile_host(source_host, save_option)
+    def profile_host(source_host, save_option, logger)
       source_host = define_source(source_host)
       save_config(source_host) if save_option && save_config?
 
       source_ssh  = connect_source(source_host)
 
       profile = UI.spinner("Checking source host") do
-        CloudFlock::Task::ServerProfile.new(source_ssh)
+        CloudFlock::Task::ServerProfile.new(source_ssh, logger)
       end
 
       {source_host[:hostname] => profile}

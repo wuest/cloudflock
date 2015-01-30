@@ -1,8 +1,11 @@
 require 'cloudflock/remote/ssh'
+require 'cloudflock/log'
 require 'cpe'
 
 module CloudFlock; module Task
   class ServerProfile
+    include CloudFlock::Log
+
     # Public: List of linux distributions supported by CloudFlock
     DISTRO_NAMES = %w{Arch CentOS Debian Gentoo Scientific SUSE Ubuntu RedHat}
 
@@ -15,12 +18,16 @@ module CloudFlock; module Task
     attr_reader :cpe
     attr_reader :warnings
     attr_reader :process_list
+    attr_reader :logger
 
     # Public: Initialize the Profile object.
     #
-    # shell   - An SSH object which is open to the host which will be profiled.
-    def initialize(shell)
+    # shell  - An SSH object which is open to the host which will be profiled.
+    # logger - Object which represents a logging facility, if any.
+    #          (default: nil)
+    def initialize(shell, logger = nil)
       @shell    = shell
+      @logger   = logger
       @cpe      = nil
       @warnings = []
       @info     = []
@@ -549,7 +556,9 @@ module CloudFlock; module Task
     #
     # Returns a String
     def query(*args)
-      @shell.query(*args)
+      log(args.first, '> ')
+      output = @shell.query(*args)
+      log(output, '< ')
     end
 
     # Internal: Wrap SSH#as_root
@@ -558,7 +567,9 @@ module CloudFlock; module Task
     #
     # Returns a String
     def as_root(*args)
-      @shell.as_root(*args)
+      log(args.first, '(root)> ')
+      output = @shell.as_root(*args)
+      log(output, '(root)< ')
     end
 
     # Internal: Add a warning to the list of warnings encountered.
